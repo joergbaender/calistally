@@ -1,7 +1,7 @@
 # Spec 1: Data model and Dropbox file layout
 
 - **Date:** 2026-10-06
-- **Status:** awaiting the owner's review (revised 2026-10-06 after a spec review; the points that need a decision are collected in §11)
+- **Status:** awaiting the owner's approval (revised 2026-10-06 after a spec review; the owner's answers to the open points are recorded in §11)
 - **Scope:** the foundation every later spec depends on: TypeScript types, JSON Schema, validation, schema upgrades, the seed exercise catalog, the Dropbox file layout and the derived-value rules. This spec covers **no UI, no sync code and no XLSX parser**.
 
 This spec replaces HANDOVER.md §3 (draft data model) and the storage part of §3. Where they disagree, this spec wins.
@@ -29,7 +29,7 @@ The second use case is **entering a session or a set after the fact** (phone for
 | # | Decision | Replaces |
 |---|---|---|
 | D1 | Structure: **Session → Block → Set**. A second run of the same exercise in one session is a second block. | HANDOVER `SetGroup` with `pattern`/`kind` (dropped; the block's sets *are* the pattern) |
-| D2 | **Flat exercise catalog**: every distinct thing trained is its own entry (e.g. `Dips (Rings)`), optionally grouped by `family`. Small tweaks (steeper, deep, handles) go in a block note. **Known limit:** a tweak that lives in a note is invisible to the ↑↓ indicators and to any v1.1 trend, so a steeper block and a flatter block are compared as equals. Rule of thumb: a tweak the owner wants to track as progression (e.g. bar angle on Australian pull-ups) gets its own catalog entry in the same `family`; one-off remarks go in the note. See §11. | HANDOVER `variant` attributes / `variantOptions` |
+| D2 | **Flat exercise catalog**: every distinct thing trained is its own entry (e.g. `Dips (Rings)`), optionally grouped by `family`. Small tweaks (steeper, deep, handles) go in a block note. **Known limit:** a tweak that lives in a note is invisible to the ↑↓ indicators and to any v1.1 trend, so a steeper block and a flatter block are compared as equals. Rule of thumb: a tweak the owner wants to track as progression (e.g. bar angle on Australian pull-ups) gets its own catalog entry in the same `family`; one-off remarks go in the note. | HANDOVER `variant` attributes / `variantOptions` |
 | D3 | Catalog is **user-extensible in the app** (create while logging, edit on a catalog screen) and **developer-extensible** through a seed file in the repo. | Catalog only as a fixed list |
 | D4 | `pattern` ∈ `push, pull, legs, core, shoulders, neck, conditioning, other`. Day-list filter chips: Push · Pull · Legs · Other · All. The filter uses **each block's exercise pattern**, not the session label. | Filter by session `type` |
 | D5 | **One Dropbox file per session.** | One file per year |
@@ -44,6 +44,8 @@ The second use case is **entering a session or a set after the fact** (phone for
 | D14 | **Schema-first.** One schema definition in code is the single source; the TS types are inferred from it and the JSON Schema files are emitted from it. | Earlier draft: JSON Schema generated from plain TS types |
 | D15 | **One model version** for all file types. Any change to the stored shape bumps it, including a new optional field. | Not covered |
 | D16 | `completedAt` and `startedAt` mean **"logged in real time"** and are optional. Entries made after the fact have no timestamps. `source` is `'app'` or `'migrated'`. | Earlier draft: `completedAt` required on every set of a `'live'` session |
+| D17 | **No `side` field on sets.** A `perSide` exercise is always logged as both sides. A set done on one side only is a normal set with a set note saying so. | Earlier draft: `side?: 'L' \| 'R'` |
+| D18 | **`reps > 0`.** A failed attempt is not a set; it goes in the block note. | Not covered |
 
 ## 3. Entities
 
@@ -144,7 +146,6 @@ interface WorkoutSet extends RecordMeta {
   seconds?: number;
   loadType: LoadType;
   loadKg: number;        // 0 for bodyweight. 'assist' kg reduces load; 'band' kg is nominal band resistance
-  side?: 'L' | 'R';      // only for perSide exercises, for one-off single-side sets
   completedAt?: string;  // UTC; set when the set is logged in real time, absent otherwise
   restSec?: number;      // stated rest for sets without completedAt (migrated "every 2 minutes")
   aggregate?: true;      // migrated "100 Diamonds": total reps, set count unknown (see §6)
@@ -181,7 +182,7 @@ interface BodyweightEntry extends RecordMeta {
 
 ### Not in the model, on purpose
 
-SetGroup/pattern (the block's sets are the pattern), variant attributes (flat catalog), RPE/RIR, stored rest for live sets, and any stored totals, deltas, PRs or session end time. All of these are either derived or out of scope.
+SetGroup/pattern (the block's sets are the pattern), variant attributes (flat catalog), RPE/RIR, a `side` on sets (D17), sets with 0 reps (D18), stored rest for live sets, and any stored totals, deltas, PRs or session end time. All of these are either derived or out of scope.
 
 ## 4. Dropbox file layout
 
@@ -239,8 +240,7 @@ A file that fails a hard rule on read is **quarantined**: kept unchanged, report
 
 *Catalog rules (soft).* These need `exercises.json` as well as the session file:
 - `exerciseId` refers to a catalog entry (a tombstoned entry counts, and is restored as archived, see §3);
-- the set's `reps` / `seconds` matches the exercise's `metric`;
-- `side` only appears when the exercise is `perSide`.
+- the set's `reps` / `seconds` matches the exercise's `metric`.
 
 A soft failure **never quarantines**. The block is flagged in the UI (e.g. "unknown exercise"), listed on an issues screen, and the file stays readable and writable. The reasons: the session file and the catalog are two separate uploads, so another device can see a session before the catalog entry it refers to; and a catalog problem must not be able to lock away training history.
 
@@ -249,7 +249,7 @@ A soft failure **never quarantines**. The block is flagged in the UI (e.g. "unkn
 - **Every seed `id` equals `slug(name)`.** A test enforces it, so the seed and in-app creation can never produce two ids for one name.
 - **Every seed entry carries a fixed `updatedAt`** in the seed file (the day it was added to the seed), and the seed merge copies it unchanged. A seed entry is therefore always older than anything the owner did to that entry, so a fresh install that seeds while offline can't overwrite his edits or bring back an entry he deleted when the two catalogs merge.
 - On first run, and on every app start after a deploy, entries whose `id` is **missing** from the Dropbox catalog are added. Existing entries are **never** modified, even if the seed changed. A tombstoned or archived id is never re-added.
-- Initial seed: derived from the XLSX (draft, for the owner's review before the implementation merges it). All entries have `metric: 'reps'` and `archived: false`.
+- Initial seed: derived from the XLSX. the owner confirmed the three points below the table on 2026-10-06; the rest of the table is approved together with this spec. All entries have `metric: 'reps'` and `archived: false`.
 
 | id | name | family | pattern | defaultLoadType | perSide |
 |---|---|---|---|---|---|
@@ -278,7 +278,10 @@ A soft failure **never quarantines**. The block is flagged in the UI (e.g. "unkn
 | knee-raises-dip-bar | Knee Raises (Dip Bar) | Knee Raises | core | bodyweight | no |
 | burpees | Burpees | Burpees | conditioning | bodyweight | no |
 
-Things to confirm in review: whether "Dips (Bar)" with a vest and "Dips (Bar)" without one are really one exercise (load type per set handles both); whether the single-leg RDL dumbbell load counts as `external` or `added`; and whether `perSide` is correct for single-leg RDL and split squats. `perSide` can't be changed after creation, so it matters to get it right in the seed.
+Confirmed by the owner (2026-10-06):
+- "Dips (Bar)" with a vest and without one are **one exercise**; the load type per set tells them apart.
+- The single-leg RDL dumbbell load is **`external`**.
+- **`perSide`** is true for Single-leg RDL, Single-leg RDL (Band) and Split Squats, and false for everything else in the seed. It can't be changed after creation.
 
 ## 6. Legacy data that can't be fully reconstructed
 
@@ -286,7 +289,7 @@ These rules let the migration (spec 2) record incomplete history honestly, witho
 
 - **Total known, set count unknown** (`100 Diamonds`): a block with one set where `reps = 100` and `aggregate: true`. It counts towards volume totals and is excluded from the block ↑↓ comparison.
 - **Activity known, no numbers** (`Burpees, Pyramide Pullups`): a block with an empty `sets` array and a `note` (a "note-only block").
-- **Date missing or doubtful** (XLSX rows 3–5, dates the owner can't confirm): `date` holds the best estimate and `dateUncertain: true` marks it. Views show the mark. Whether such rows are kept at all, and how the estimate is made, is decided in spec 2; the flag exists so that either answer fits the model.
+- **Date missing or doubtful** (XLSX rows 3–5, dates the owner can't confirm): `date` holds the best estimate and `dateUncertain: true` marks it. Views show the mark. The undated rows 3–5 **are imported**: the migration proposes a date before the first dated row and puts each one on the review list, where the owner confirms or corrects it. A date the owner confirms as exact loses the flag. How the proposal is calculated is part of spec 2.
 - All three appear on the migration review list so the owner can fill in real values if he remembers them. `aggregate` and `dateUncertain` are not allowed in `source: 'app'` sessions. An empty block in an app session simply means nothing has been logged in it yet.
 
 ## 7. Derived-value rules (pure functions, defined here, used by every view)
@@ -297,7 +300,7 @@ All functions ignore tombstoned records and everything under a tombstoned parent
 |---|---|
 | Sibling order | Blocks in a session and sets in a block are read in **canonical order**: by `order`; then (sets only) by `completedAt`, sets without one last; then by `id`. Array position is ignored. |
 | Session order | By `date`; then by time key, which is `startedAt` or else the earliest `completedAt` in the session, sessions without a time key first; then by `id`. This order is total, so two migrated sessions on one date always sort the same way. |
-| Block totals | `totalReps` = sum of `reps` (or `totalSeconds` for timed exercises); `setCount` = number of non-aggregate sets. For `perSide` exercises the total is in per-side units: a set without `side` counts its reps, a set with `side` counts half (so `L 20` + `R 20` equals one plain set of 20). |
+| Block totals | `totalReps` = sum of `reps` (or `totalSeconds` for timed exercises); `setCount` = number of non-aggregate sets. For `perSide` exercises the total is in per-side units, exactly as logged; nothing is doubled. |
 | Exercise session total | The sum of the block totals over all blocks of exercise X in the session. Aggregate sets count. |
 | Block load | **Load group:** `bodyweight`, `added` and `assist` form one group on a signed axis (`bodyweight` = 0, `added` = +kg, `assist` = −kg); `external` and `band` are separate groups. The block's **main group** is the group of most sets (on a tie, the first set's group). **Block load** = max signed kg over the sets in the main group. |
 | Previous occurrence | For block *n* (the *n*-th block of exercise X in session S), the comparison target is block *n* of exercise X in the most recent session before S (session order) that has at least *n* blocks of X. If no session has, there is no comparison. |
@@ -311,7 +314,7 @@ All functions ignore tombstoned records and everything under a tombstoned parent
 
 **Indicators in an open session are provisional**, because the block isn't finished. Spec 4 decides whether to show them before the session closes.
 
-**Two blocks open at once.** The model allows a session where the owner alternates two exercises set by set: each exercise is one block, and the sets carry their own `completedAt`. The set interval within a block then spans the other exercise's set, which is the true interval between two sets of that exercise.
+**Two blocks open at once.** The model allows a session where the owner alternates two exercises set by set: each exercise is one block, and the sets carry their own `completedAt`. The set interval within a block then spans the other exercise's set, which is the true interval between two sets of that exercise. the owner doesn't train this way today, so the v1 live log has one open block at a time; the rule stays here so that adding it later needs no model change.
 
 The v1.1 overload layer (trends, best set, "+X since last month", effective load = estimate) will be added as further pure functions over this same data. No new stored fields are expected, with the limit noted under D2.
 
@@ -339,26 +342,28 @@ The library choices (schema library, validator) are made in the implementation p
   - **slug and catalog:** the slug rule, transliteration, the empty result and collisions; every seed `id` equals `slug(name)`; the name-uniqueness check;
   - **seed merge:** adds missing entries, never overwrites, never resurrects tombstones, keeps the fixed `updatedAt`;
   - **ordering:** sibling order with duplicate and fractional `order` values; session order with same-date sessions with and without timestamps;
-  - **derived values:** tombstone filtering in every function; every ↑↓ case (equal, up, down, aggregate, no previous occurrence, block *n* matching, mixed load groups → `≠`, assist decreasing → ↑, equality after rounding, a `perSide` block with one-sided sets, timed exercises); the per-exercise indicator, including the changed-shape case from §7; set intervals with missing and reversed timestamps and with two interleaved blocks; session open/closed with and without `startedAt`.
+  - **derived values:** tombstone filtering in every function; every ↑↓ case (equal, up, down, aggregate, no previous occurrence, block *n* matching, mixed load groups → `≠`, assist decreasing → ↑, equality after rounding, timed exercises); the per-exercise indicator, including the changed-shape case from §7; set intervals with missing and reversed timestamps and with two interleaved blocks; session open/closed with and without `startedAt`.
 - **Fixtures are synthetic.** They are written in the XLSX's notation style with made-up numbers and dates. Real training data is never committed (CLAUDE.md). Spec 2 runs against the real XLSX locally, outside git.
 
 ## 10. Out of scope (later specs)
 
-- **Spec 2, XLSX migration:** parser, review list, and the open questions (meaning of `N down` when not written out, `13,2x` / `11,2x`, suspicious dates, undated rows 3–5, `10Kg` face pulls in D41, `(R 1x 15)` in M16).
+- **Spec 2, XLSX migration:** parser, review list, and the open questions (meaning of `N down` when not written out, `13,2x` / `11,2x`, suspicious dates, the date proposal for the undated rows 3–5, `10Kg` face pulls in D41, `(R 1x 15)` in M16, which under D17 becomes a normal set with a note).
 - **Spec 3, sync and hosting:** Dropbox PKCE with a refresh token, IndexedDB copy, write queue (catalog writes queued ahead of the session writes that depend on them), `rev`-checked upload, the merge itself (built on the record rules in §3), first load on a new device, hosting choice (GitHub Pages vs Cloudflare Pages), redirect URIs.
 - **Spec 4+, UI:** live log (sticky load, last-time reference, create an exercise inline, entering sets and sessions after the fact), day list with filter chips and ↑↓, per-exercise history, calendar/consistency, bodyweight log, catalog screen, issues screen for quarantined files and soft validation failures.
 - **v1.1:** overload calculations.
 
-## 11. Open points for the owner
+## 11. the owner's answers to the review's open points (2026-10-06)
 
-The review on 2026-10-06 led to the changes below. Each one is written into the spec as the recommended option; these are the ones where the choice is the owner's and a different answer would change the spec.
+The spec review left nine points where the choice was the owner's. His answers are below, and the sections named are written accordingly.
 
-1. **Tweaks that are overload levers (D2).** As written: tweaks stay in the block note, and anything the owner wants to track as progression becomes its own catalog entry. The alternative is an optional ordinal `level` on Block now (e.g. bar-angle step), which the ↑↓ indicators could then compare. Adding it later is possible but is a model-version bump.
-2. **Schema-first (D14)** instead of JSON Schema generated from plain TS types. The cost is that `types.ts` no longer contains hand-written interfaces; the interfaces in §3 stay as the documentation.
-3. **Session files never move (D12).** After a date edit the file name shows the old date. The earlier draft moved the file.
-4. **`source: 'live'` became `'app'`, and timestamps became optional (D16)**, so that a session or set can be entered after the fact without invented times.
-5. **Undated XLSX rows (`dateUncertain`).** The flag is in the model. Whether rows 3–5 are imported with an estimated date or left out is still the owner's decision in spec 2.
-6. **Alternating two exercises set by set.** Does this happen in practice? The model supports it (§7); the live log would need two blocks open at once, which is a spec 4 question.
-7. **One-sided sets count half** in the totals of a `perSide` exercise (§7). The alternative is to count them as logged and show `–` for blocks that mix sided and plain sets.
-8. **`reps > 0`.** Is a logged set with 0 reps (a failed attempt) ever wanted? If yes, the constraint becomes `>= 0`.
-9. The three seed questions at the end of §5.
+| # | Point | Answer | Where |
+|---|---|---|---|
+| 1 | Tweaks that are overload levers | They stay in the block note; a tweak he wants to track as progression gets **its own catalog entry**. No `level` field on Block. | D2 |
+| 2 | Single source for types and schema | **Schema-first.** | D14, §5 |
+| 3 | Session file path after a date edit | The file **never moves**. | D12, §4 |
+| 4 | Entries made after the fact | **Optional timestamps**; `source` is `'app'` or `'migrated'`. | D16, §3 |
+| 5 | Undated XLSX rows 3–5 | **Imported with an estimated date**, marked `dateUncertain`, each one on the review list. | §6 |
+| 6 | Alternating two exercises set by set | **Not now, maybe later.** The model rule stays; the v1 live log has one open block. | §7 |
+| 7 | One-sided sets on per-side exercises | **No `side` field.** Such a set is a normal set with a note. | D17 |
+| 8 | Sets with 0 reps | **Not allowed**; `reps > 0`. A failed attempt goes in the block note. | D18, §5 |
+| 9 | Seed catalog | Dips (Bar) with and without a vest is **one exercise**; single-leg RDL dumbbell load is **`external`**; `perSide` is true for **Single-leg RDL, Single-leg RDL (Band) and Split Squats** only. | §5 |
