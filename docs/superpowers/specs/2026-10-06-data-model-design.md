@@ -198,8 +198,8 @@ SetGroup/pattern (the block's sets are the pattern), variant attributes (flat ca
 - `<id8>` is the first 8 characters of the session uuid.
 - **The content inside a file is the truth, not its name.** The path exists so the folder is easy to browse.
 - **The path never changes (D12).** `<YYYY>` and `<YYYY-MM-DD>` are the session's `date` when the file is first written. If the date is edited later, the file keeps its name and the reader goes by the content. Moving the file would be a second, non-atomic operation that an offline device holding the old path and `rev` can collide with; a slightly stale file name after a rare date edit is the cheaper problem.
-- **Two files with the same session id** should never exist (it takes a manual copy in Dropbox). If the reader finds them, it merges them by the record rules in §3, writes the result to the path that sorts first, leaves the other file untouched and reports it to the owner.
-- Expected size: a set is about 170–230 bytes of JSON, and a session has roughly 40–60 sets, so a session file is about 7–14 KB. At 150–200 sessions a year that is 1–3 MB a year.
+- **Two files with the same session id** should never exist (it takes a manual copy in Dropbox). If the reader finds them, it merges them by the record rules in §3, writes the result to the path that sorts first, leaves the other file untouched and reports it to the owner. Since the extra file is still there on the next read, this is **one ongoing issue, not a new report per read**; how the issues screen shows and clears it (when the extra file is gone) is spec 4.
+- Expected size: a set is about 170–230 bytes of JSON, and a session has roughly 20–40 sets, so a session file is about 4–10 KB. At 150–200 sessions a year that is under 2 MB a year.
 - Why one file per session (D5): live logging uploads after every set, often over weak gym signal. A session file is small and written by one device, so conflicts are practically limited to deliberate edits from two devices. Merging stays a safety net rather than a normal path. The cost is the first load on a new device, which means fetching many files (spec 3 evaluates Dropbox `download_zip` from the browser).
 
 ## 5. Versioning, validation, seed merge
@@ -208,7 +208,8 @@ SetGroup/pattern (the block's sets are the pattern), variant attributes (flat ca
 - **One model version (D15).** A single integer, starting at 1, shared by all file types. Every file the app writes carries the current value in `schemaVersion`. A bump that doesn't change a given file type gets a no-op step for it.
 - **What bumps it:** any change to the stored shape, including a new optional field. The schema rejects unknown properties, and an old app that let them through would drop them on its next write. With the bump, an old app stops writing the file instead of damaging it.
 - `upgrade(file)` applies the step functions `v1→v2→…` in memory on read. The next write stores the current version. Files in Dropbox may therefore sit at different versions for a while; that is fine.
-- **If a file's version is higher than the app knows (D9):** the app never writes that file and the UI asks to update the app. It shows the content only if the file still validates against the schema the app knows; otherwise it just lists the file as "needs app update". Changes already queued for that file are kept until the app is updated (spec 3). This stops a stale cached PWA from overwriting newer data.
+- **If a file's version is higher than the app knows (D9):** the app never writes that file and the UI asks to update the app. This stops a stale cached PWA from overwriting newer data. For **reading**, the old app validates the file leniently: unknown properties are ignored, and if the known fields are valid the content is shown read-only. Only if the known fields fail does the file get listed as "needs app update". So a deploy that adds one optional field doesn't blind every device that hasn't updated yet; the phone at the gym on a cached v1 PWA can still show a v2 catalog and pick exercises from it. The lenient mode is used only for too-new files; files at the app's own version are validated strictly.
+- **The old app keeps working within its own version.** It can still create and write **new** session files at its version, so live logging continues; the updated app upgrades them on read (D15). What it can't do is write a too-new file, so with a v2 catalog it can't create or edit exercises until it is updated. Changes already queued for a too-new file are kept until the app is updated (spec 3).
 
 ### Validation
 
@@ -224,7 +225,7 @@ SetGroup/pattern (the block's sets are the pattern), variant attributes (flat ca
 - `name`: non-empty; `tags`: non-empty strings;
 - no unknown properties, at every level.
 
-**When.** The app validates every file it reads **and every file before it writes it**. A file that fails before a write is not written; that is an app bug, it is shown as an error, and the last valid version stays in place. The migration script (spec 2) validates every file it writes against the same schema.
+**When.** The app validates every file it reads **and every file before it writes it**. A file that fails before a write is **held back from Dropbox only**: the change stays in the local copy and in the pending-write queue (spec 3), the last valid version stays in Dropbox, and the UI shows an error. Nothing the owner typed is discarded. This is an app bug by definition; after a fix is deployed the queued write is validated again and goes through. The migration script (spec 2) validates every file it writes against the same schema.
 
 **Two levels (D13).**
 
@@ -323,8 +324,8 @@ The v1.1 overload layer (trends, best set, "+X since last month", effective load
 1. Minimal TS project: `package.json`, `tsconfig.json`, Vitest, plus the build step that emits the JSON Schema. (Prerequisite: Node.js LTS installed on the dev PC.)
 2. `src/model/schema.ts`: the schema definition for the entities in §3 with the constraints in §5. `src/model/types.ts`: the TS types inferred from it.
 3. The emitted JSON Schema (e.g. `schema/*.schema.json`), committed, with a test that fails if it no longer matches the schema definition.
-4. `src/model/validate.ts`: schema validation plus the hard and soft rules in §5, returning structured errors that say which level failed.
-5. `src/model/upgrade.ts`: the version-step framework (only v1 exists, so it's the framework plus the "too new → don't write" result).
+4. `src/model/validate.ts`: schema validation (strict, and the lenient mode for too-new files) plus the hard and soft rules in §5, returning structured errors that say which level failed.
+5. `src/model/upgrade.ts`: the version-step framework (only v1 exists, so it's the framework plus the "too new → read-only" result).
 6. `src/model/record.ts`: the record helpers from §3 (set `updatedAt`, delete, undelete, next `order`, midpoint `order`).
 7. `src/model/slug.ts`, the name-uniqueness check and the seed merge function.
 8. `src/model/derive.ts`: the rules in §7.
@@ -336,8 +337,8 @@ The library choices (schema library, validator) are made in the implementation p
 ## 9. Testing
 
 - Tests come first for:
-  - **validation:** valid and invalid files; every hard rule; every soft rule, including that a soft failure never quarantines; an empty block in an app session is valid; `aggregate` and `dateUncertain` are rejected in app sessions; a file that fails validation is not written;
-  - **versioning:** upgrade steps and the too-new result;
+  - **validation:** valid and invalid files; every hard rule; every soft rule, including that a soft failure never quarantines; an empty block in an app session is valid; `aggregate` and `dateUncertain` are rejected in app sessions; a file that fails validation is not written, and the change is still in the local copy and the queue afterwards;
+  - **versioning:** upgrade steps; a too-new file with an unknown property is readable and marked read-only; a too-new file whose known fields are invalid is marked "needs app update"; a file at the app's own version with an unknown property is rejected;
   - **record helpers:** `updatedAt` moves forward even when the clock doesn't; a child change leaves the parent's `updatedAt` alone; delete keeps the record's content; undelete; a tombstoned parent hides its children;
   - **slug and catalog:** the slug rule, transliteration, the empty result and collisions; every seed `id` equals `slug(name)`; the name-uniqueness check;
   - **seed merge:** adds missing entries, never overwrites, never resurrects tombstones, keeps the fixed `updatedAt`;
@@ -348,8 +349,8 @@ The library choices (schema library, validator) are made in the implementation p
 ## 10. Out of scope (later specs)
 
 - **Spec 2, XLSX migration:** parser, review list, and the open questions (meaning of `N down` when not written out, `13,2x` / `11,2x`, suspicious dates, the date proposal for the undated rows 3–5, `10Kg` face pulls in D41, `(R 1x 15)` in M16, which under D17 becomes a normal set with a note).
-- **Spec 3, sync and hosting:** Dropbox PKCE with a refresh token, IndexedDB copy, write queue (catalog writes queued ahead of the session writes that depend on them), `rev`-checked upload, the merge itself (built on the record rules in §3), first load on a new device, hosting choice (GitHub Pages vs Cloudflare Pages), redirect URIs.
-- **Spec 4+, UI:** live log (sticky load, last-time reference, create an exercise inline, entering sets and sessions after the fact), day list with filter chips and ↑↓, per-exercise history, calendar/consistency, bodyweight log, catalog screen, issues screen for quarantined files and soft validation failures.
+- **Spec 3, sync and hosting:** Dropbox PKCE with a refresh token, IndexedDB copy, write queue (catalog writes queued ahead of the session writes that depend on them), `rev`-checked upload, the merge itself (built on the record rules in §3), first load on a new device, a one-tap "update app" for the PWA when a too-new file is seen, hosting choice (GitHub Pages vs Cloudflare Pages), redirect URIs.
+- **Spec 4+, UI:** live log (sticky load, last-time reference, create an exercise inline, entering sets and sessions after the fact), day list with filter chips and ↑↓, per-exercise history, calendar/consistency, bodyweight log, catalog screen, issues screen for quarantined files, soft validation failures, held-back writes and duplicate session files.
 - **v1.1:** overload calculations.
 
 ## 11. the owner's answers to the review's open points (2026-10-06)
