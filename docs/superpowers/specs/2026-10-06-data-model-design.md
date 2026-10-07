@@ -250,7 +250,7 @@ A soft failure **never quarantines**. The block is flagged in the UI (e.g. "unkn
 - `seed-exercises.json` in the repo. Each entry follows the `Exercise` shape.
 - **Every seed `id` equals `slug(name)`.** A test enforces it, so the seed and in-app creation can never produce two ids for one name.
 - **Every seed entry carries a fixed `updatedAt`** in the seed file (the day it was added to the seed), and the seed merge copies it unchanged. A seed entry is therefore always older than anything the owner did to that entry, so a fresh install that seeds while offline can't overwrite his edits or bring back an entry he deleted when the two catalogs merge.
-- On first run, and on every app start after a deploy, entries whose `id` is **missing** from the Dropbox catalog are added. Existing entries are **never** modified, even if the seed changed. A tombstoned or archived id is never re-added.
+- On first run, and on every app start after a deploy, entries whose `id` is **missing** from the Dropbox catalog are added. Existing entries are **never** modified, even if the seed changed. A tombstoned or archived id is never re-added. A seed entry whose **name** already exists in the catalog under a different id (names compared as in §3; live, archived and tombstoned entries all count) is **skipped** and reported, so a renamed entry of the owner's never gets a second record from a later seed (§11, point 10).
 - Initial seed: derived from the XLSX. the owner confirmed the three points below the table on 2026-10-06; the rest of the table is approved together with this spec. All entries have `metric: 'reps'` and `archived: false`.
 
 | id | name | family | pattern | defaultLoadType | perSide |
@@ -342,7 +342,7 @@ The library choices (schema library, validator) are made in the implementation p
   - **versioning:** upgrade steps; a too-new file with an unknown property is readable and marked read-only; a too-new file whose known fields are invalid is marked "needs app update"; a file at the app's own version with an unknown property is rejected;
   - **record helpers:** `updatedAt` moves forward even when the clock doesn't; a child change leaves the parent's `updatedAt` alone; delete keeps the record's content; undelete; a tombstoned parent hides its children;
   - **slug and catalog:** the slug rule, transliteration, the empty result and collisions; every seed `id` equals `slug(name)`; the name-uniqueness check;
-  - **seed merge:** adds missing entries, never overwrites, never resurrects tombstones, keeps the fixed `updatedAt`;
+  - **seed merge:** adds missing entries, never overwrites, never resurrects tombstones, keeps the fixed `updatedAt`, skips (and reports) a seed entry whose name already exists under another id, including archived and tombstoned entries;
   - **ordering:** sibling order with duplicate and fractional `order` values; session order with same-date sessions with and without timestamps;
   - **derived values:** tombstone filtering in every function; every ↑↓ case (equal, up, down, aggregate, no previous occurrence, block *n* matching, mixed load groups → `≠`, assist decreasing → ↑, equality after rounding, timed exercises); the per-exercise indicator, including the changed-shape case from §7; set intervals with missing and reversed timestamps and with two interleaved blocks; session open/closed with and without `startedAt`.
 - **Fixtures are synthetic.** They are written in the XLSX's notation style with made-up numbers and dates. Real training data is never committed (CLAUDE.md). Spec 2 runs against the real XLSX locally, outside git.
@@ -369,3 +369,4 @@ The spec review left nine points where the choice was the owner's. His answers a
 | 7 | One-sided sets on per-side exercises | **No `side` field.** Such a set is a normal set with a note. | D17 |
 | 8 | Sets with 0 reps | **Not allowed**; `reps > 0`. A failed attempt goes in the block note. | D18, §5 |
 | 9 | Seed catalog | Dips (Bar) with and without a vest is **one exercise**; single-leg RDL dumbbell load is **`external`**; `perSide` is true for **Single-leg RDL, Single-leg RDL (Band) and Split Squats** only. | §5 |
+| 10 | Seed entry whose name already exists under another id (answered 2026-10-07, after implementation review) | **Skip it** when the name matches any catalog entry, live, archived or tombstoned; the merge reports the skipped entries. | §5 |
