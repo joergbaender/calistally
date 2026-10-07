@@ -175,6 +175,14 @@ describe('parseLine: review triggers and failures', () => {
     expect(p.issues).toEqual([{ kind: 'parenthesised-numbers', detail: '(R 1x 20)' }]);
   });
 
+  it('never drops numbers silently: unused loads, idle `mit` and `nichts` with numbers fail', () => {
+    for (const line of ['nichts 20x', 'Pullups 20x 25kg', '6kg 20x mit 8kg', '20x ohne mit 5kg']) {
+      const p = parseLine(line);
+      expect(p.segments, line).toEqual([]);
+      expect(p.issues.map((i) => i.kind), line).toContain('unparsed-line');
+    }
+  });
+
   it('reports grammar failures as unparsed-line with no segments', () => {
     for (const line of ['mit', '6kg', '3', 'x 20', 'Pullups 1x 2x dann', 'Pullups 5x Dips 5x', '0x 3']) {
       const p = parseLine(line);

@@ -196,7 +196,10 @@ export function parseLine(input: string): ParsedLine {
     out.issues.push({ kind: 'pyramid-expanded', detail: `${blocks} × ${reps.join(' ')}` });
     return out;
   }
-  if (out.nichts) return out;
+  if (out.nichts) {
+    if (numeric.length > 0) out.issues.push({ kind: 'unparsed-line', detail: 'nichts with numbers' });
+    return out;
+  }
   if (numeric.length === 0) {
     if (rest.length > 0) {
       out.issues.push({ kind: 'unparsed-line', detail: `keyword without numbers: ${rest.map((t) => t.raw).join(' ')}` });
@@ -241,8 +244,10 @@ function runGrammar(rest: readonly Token[]): { segments: LineSegment[]; issues: 
   let sets = segments[0]!.sets;
   let load: number | undefined;
   let bodyweightMode = false;
+  let loadUnused = false;
 
   const push = (reps: number, count: number): void => {
+    loadUnused = false;
     if (!(reps > 0) || !Number.isInteger(count) || count < 1) throw new GrammarError(`cannot read ${count} × ${reps}`);
     if (count > reps) issues.push({ kind: 'sets-exceed-reps', detail: `${count} sets of ${reps}` });
     for (let k = 0; k < count; k += 1) {
@@ -261,7 +266,9 @@ function runGrammar(rest: readonly Token[]): { segments: LineSegment[]; issues: 
     const n3 = rest[i + 3];
     switch (t.type) {
       case 'load':
+        if (loadUnused) throw new GrammarError('a load with no sets');
         load = t.kg;
+        loadUnused = true;
         bodyweightMode = false;
         if (n1?.type === 'x' && n2?.type === 'num') {
           const count = n3?.type === 'xsets' ? n3.sets : 1;
@@ -298,7 +305,14 @@ function runGrammar(rest: readonly Token[]): { segments: LineSegment[]; issues: 
         switch (t.text) {
           case 'mit':
             if (n1?.type !== 'load') throw new GrammarError('mit without a load');
-            for (const s of sets) if (s.kg === undefined && !s.bodyweight) s.kg = n1.kg;
+            let applied = 0;
+            for (const s of sets) {
+              if (s.kg === undefined && !s.bodyweight) {
+                s.kg = n1.kg;
+                applied += 1;
+              }
+            }
+            if (applied === 0) throw new GrammarError('mit LOAD applies to no set');
             i += 2;
             break;
           case 'ohne':
@@ -332,6 +346,7 @@ function runGrammar(rest: readonly Token[]): { segments: LineSegment[]; issues: 
         throw new GrammarError(`unexpected ${t.raw}`);
     }
   }
+  if (loadUnused) throw new GrammarError('a load with no sets');
   if (segments.some((s) => s.sets.length === 0)) throw new GrammarError('a block without sets');
   return { segments, issues };
 }
