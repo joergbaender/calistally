@@ -44,6 +44,7 @@ describe('mergeSeed', () => {
     expect(r.added).toHaveLength(24);
     expect(r.catalog[0]).toEqual(SEED[0]);
     expect(r.catalog[0]).not.toBe(SEED[0]);
+    expect(r.skipped).toEqual([]);
   });
 
   it('never modifies an existing entry, even if the seed differs', () => {
@@ -51,6 +52,7 @@ describe('mergeSeed', () => {
     const r = mergeSeed([mine], SEED);
     expect(r.catalog.find((e) => e.id === 'pull-ups')).toBe(mine);
     expect(r.added).toHaveLength(23);
+    expect(r.skipped).toEqual([]);
   });
 
   it('never re-adds a tombstoned or archived id', () => {
@@ -60,5 +62,27 @@ describe('mergeSeed', () => {
     expect(r.catalog.filter((e) => e.id === 'pull-ups')).toEqual([dead]);
     expect(r.catalog.filter((e) => e.id === 'dips-bar')).toEqual([archived]);
     expect(r.added).toHaveLength(22);
+    expect(r.skipped).toEqual([]);
+  });
+
+  it('skips a seed entry whose name exists under a different id, and reports it', () => {
+    const mine = exercise({ id: 'my-pulls', name: 'pull-UPS ' });
+    const r = mergeSeed([mine], SEED);
+    expect(r.added).toHaveLength(23);
+    expect(r.catalog.some((e) => e.id === 'pull-ups')).toBe(false);
+    expect(r.skipped).toHaveLength(1);
+    expect(r.skipped[0]?.seed.id).toBe('pull-ups');
+    expect(r.skipped[0]?.existing.id).toBe('my-pulls');
+  });
+
+  it('applies the name block to archived and tombstoned entries under another id', () => {
+    const archived = exercise({ id: 'my-pulls', name: 'Pull-ups', archived: true });
+    const dead = exercise({ id: 'my-dips', name: 'Dips (Bar)', deletedAt: T0 });
+    const r = mergeSeed([archived, dead], SEED);
+    expect(r.added).toHaveLength(22);
+    expect(r.skipped.map((s) => [s.seed.id, s.existing.id]).sort()).toEqual([
+      ['dips-bar', 'my-dips'],
+      ['pull-ups', 'my-pulls'],
+    ]);
   });
 });
