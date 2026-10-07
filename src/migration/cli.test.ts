@@ -101,6 +101,46 @@ describe('runMigration', () => {
     }
   });
 
+  it('D1: refuses an output folder whose sessions/ holds a session not written by the migration', async () => {
+    const own = await mkdtemp(path.join(os.tmpdir(), 'calistally-cli-unsafe-'));
+    try {
+      const book = path.join(own, 'synthetic.xlsx');
+      const dec = path.join(own, 'decisions.json');
+      await writeWorkbook(book, { A6: { date: '2030-02-01' }, B6: '6kg 15x' });
+      await writeFile(dec, '{}');
+      const target = path.join(own, 'out');
+      const appFile = path.join(target, 'sessions', '2030', 'x.json');
+      const appContent = '{ "schemaVersion": 1, "session": { "source": "app" } }';
+      await mkdir(path.dirname(appFile), { recursive: true });
+      await writeFile(appFile, appContent);
+      const lines: string[] = [];
+      const code = await runMigration({ xlsx: book, decisions: dec, out: target, repoRoot, log: (l) => lines.push(l) });
+      expect(code).toBe(EXIT.usage);
+      expect(lines.join('\n')).toContain('sessions/2030/x.json');
+      expect(await snapshot(target)).toEqual(new Map([['sessions/2030/x.json', appContent]]));
+    } finally {
+      await rm(own, { recursive: true, force: true });
+    }
+  });
+
+  it('D1: refuses an output folder whose sessions/ holds a non-JSON file', async () => {
+    const own = await mkdtemp(path.join(os.tmpdir(), 'calistally-cli-unsafe-'));
+    try {
+      const book = path.join(own, 'synthetic.xlsx');
+      const dec = path.join(own, 'decisions.json');
+      await writeWorkbook(book, { A6: { date: '2030-02-01' }, B6: '6kg 15x' });
+      await writeFile(dec, '{}');
+      const target = path.join(own, 'out');
+      await mkdir(path.join(target, 'sessions'), { recursive: true });
+      await writeFile(path.join(target, 'sessions', 'notes.txt'), 'mine');
+      const code = await runMigration({ xlsx: book, decisions: dec, out: target, repoRoot, log: quiet });
+      expect(code).toBe(EXIT.usage);
+      expect(await snapshot(target)).toEqual(new Map([['sessions/notes.txt', 'mine']]));
+    } finally {
+      await rm(own, { recursive: true, force: true });
+    }
+  });
+
   it('rejects a malformed decisions file', async () => {
     await writeFile(decisions, '{"g9": {}}');
     await expect(runMigration({ xlsx, decisions, out, repoRoot, log: quiet })).rejects.toThrow(/cell address/);

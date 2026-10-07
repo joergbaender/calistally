@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { SEED } from '../model/seed';
 import { buildSessions } from './build';
@@ -28,6 +28,11 @@ export async function runMigration(args: MigrationArgs): Promise<number> {
     log(`refusing --out ${out}: it is inside the repository, and training data never goes into git`);
     return EXIT.usage;
   }
+  const foreign = await foreignSessionFile(out);
+  if (foreign !== undefined) {
+    log(`refusing --out ${out}: ${foreign} was not written by the migration (it may hold sessions from the app); point --out at an empty or migration-only folder`);
+    return EXIT.usage;
+  }
   const grid = await readWorkbook(args.xlsx);
   const decisions = parseDecisions(await readFile(args.decisions, 'utf8'));
   const result = buildSessions(splitRows(grid), decisions, SEED, { year: SHEET_YEAR, stamp: MIGRATION_STAMP, bodyweightKg: args.bodyweightKg }, outsideCells(grid));
@@ -46,4 +51,44 @@ export async function runMigration(args: MigrationArgs): Promise<number> {
   await writeOutput(out, files);
   log(`${result.sessions.length} sessions, ${result.review.length} open review item(s) → ${out} (${final ? 'FINAL' : 'NOT FINAL'})`);
   return final ? EXIT.final : EXIT.open;
+}
+
+/**
+ * The first entry under `<out>/sessions` that the migration did not write (a non-`.json` file, or a file
+ * that is not `{ session: { source: 'migrated' } }`), as `sessions/<path>`; undefined when there is none.
+ * writeOutput deletes `sessions/` wholesale, so anything else there would be lost.
+ */
+async function foreignSessionFile(out: string): Promise<string | undefined> {
+  const root = path.join(out, 'sessions');
+  let info;
+  try {
+    info = await stat(root);
+  } catch {
+    return undefined;
+  }
+  const rel = (p: string): string => path.relative(out, p).split(path.sep).join('/');
+  if (!info.isDirectory()) return rel(root);
+  const walk = async (dir: string): Promise<string | undefined> => {
+    const entries = (await readdir(dir, { withFileTypes: true })).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    for (const entry of entries) {
+      const p = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        const found = await walk(p);
+        if (found !== undefined) return found;
+      } else if (!entry.isFile() || !entry.name.endsWith('.json') || !(await isMigratedSession(p))) return rel(p);
+    }
+    return undefined;
+  };
+  return walk(root);
+}
+
+async function isMigratedSession(file: string): Promise<boolean> {
+  try {
+    const data: unknown = JSON.parse(await readFile(file, 'utf8'));
+    if (typeof data !== 'object' || data === null || !('session' in data)) return false;
+    const session: unknown = data.session;
+    return typeof session === 'object' && session !== null && 'source' in session && session.source === 'migrated';
+  } catch {
+    return false;
+  }
 }
