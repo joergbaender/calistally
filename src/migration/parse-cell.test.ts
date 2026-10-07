@@ -116,6 +116,16 @@ describe('parseCell', () => {
     expect(parseCell('Deeep\n10kg 20x 16,5x flacher', 'Dips').blocks[0]?.note).toBe('Deeep flacher');
   });
 
+  it('F7: a carried note does not break the exercise-name continuation', () => {
+    for (const header of ['Dips', 'Extra']) {
+      const r = parseCell('Deeep\nOverhead Press Bands\n10kg 15x 15x easy', header);
+      expect(r.blocks, header).toHaveLength(1);
+      expect(r.blocks[0], header).toMatchObject({ exerciseId: 'overhead-press-band', note: 'Deeep easy' });
+      expect(r.blocks[0]?.sets, header).toEqual([{ reps: 15, kg: 10, bodyweight: false }, { reps: 15, kg: 10, bodyweight: false }]);
+      expect(r.issues, header).toEqual([]);
+    }
+  });
+
   it('F7: a cell with only note lines keeps its 0-set block and flags it note-only', () => {
     const r = parseCell('Deeep', 'Dips');
     expect(r.blocks).toHaveLength(1);

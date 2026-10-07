@@ -55,9 +55,12 @@ export function parseCell(text: string, header: string): CellResult {
   let current: CellBlock | undefined;
   /** F7: note lines before the first block of the cell; their text goes to the next block created. */
   let pending: { block: CellBlock; line: number; rawLine: string; noteText: string }[] = [];
+  /** The carried note text per block, so the note-only continuation below can still see the alias note. */
+  const carriedOf = new WeakMap<CellBlock, string>();
   const addBlock = (b: CellBlock): void => {
     if (pending.length > 0) {
       const carried = pending.map((n) => n.noteText).join(' ');
+      carriedOf.set(b, carried);
       setNote(b, b.note === undefined ? carried : `${carried} ${b.note}`);
       pending = [];
     }
@@ -108,17 +111,18 @@ export function parseCell(text: string, header: string): CellResult {
 
     const previous = result.blocks.at(-1);
     const previousLine = idx > 0 ? parsed[idx - 1] : undefined;
+    const carried = previous !== undefined ? carriedOf.get(previous) : undefined;
     const continuesNoteOnly =
       p.alias === undefined && p.join === 'new' && previous !== undefined && previousLine !== undefined &&
-      previousLine.aliases.length === 1 && previous.sets.length === 0 && previous.note === previousLine.alias?.raw &&
+      previousLine.aliases.length === 1 && previous.sets.length === 0 &&
+      previous.note === appendNote(carried, previousLine.alias?.raw) &&
       previous.line === idx;
     if (continuesNoteOnly) {
       // `Overhead Press Bands` then `10kg 15x 15x easy`: the second line fills the first line's block.
       const firstSeg = p.segments[0]!;
       result.issues = result.issues.filter((i) => !(i.kind === 'note-only' && i.line === previous.line));
       previous.sets = firstSeg.sets;
-      delete previous.note;
-      if (noteText !== undefined) previous.note = noteText;
+      setNote(previous, appendNote(carried, noteText));
       previous.bands = previous.bands || p.bands;
       if (p.restSec !== undefined) previous.restSec = p.restSec;
       if (firstSeg.aggregate) previous.aggregate = true;
