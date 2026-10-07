@@ -85,6 +85,16 @@ describe('parseCell', () => {
     expect(parseCell('nichts', 'Triceps Pulldowns')).toEqual({ blocks: [], tags: [], cuesDropped: [], unrecognised: [], issues: [] });
   });
 
+  it('a line the parser rejects with numbers present keeps them as a note-only block', () => {
+    for (const raw of ['nichts 20x 20x', 'Pullups 20x 25kg', '6kg 20x mit 8kg']) {
+      const r = parseCell(raw, 'Dips');
+      expect(r.blocks).toHaveLength(1);
+      expect(r.blocks[0]).toMatchObject({ sets: [], note: raw, line: 1 });
+      expect(r.issues).toHaveLength(1);
+      expect(r.issues[0]).toMatchObject({ kind: 'unparsed-line', line: 1, rawLine: raw });
+    }
+  });
+
   it('flags a line without alias in the Extra column as unknown-exercise', () => {
     const r = parseCell('20x 20x', 'Extra');
     expect(r.blocks[0]?.exerciseId).toBeUndefined();

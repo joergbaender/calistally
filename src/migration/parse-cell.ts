@@ -78,14 +78,14 @@ export function parseCell(text: string, header: string): CellResult {
       for (const i of p.issues) result.issues.push({ kind: i.kind, line, rawLine, detail: i.detail });
     };
 
-    if (p.nichts) {
-      pushIssues();
-      return;
-    }
     if (p.issues.some((i) => i.kind === 'unparsed-line')) {
       pushIssues();
       result.blocks.push(make([], { note: rawLine }));
       current = undefined;
+      return;
+    }
+    if (p.nichts) {
+      pushIssues();
       return;
     }
     if (p.segments.length === 0) {
