@@ -28,7 +28,8 @@ function schemaFor(kind: FileKind, mode: ValidationMode): TSchema {
 
 /**
  * Schema check, then the hard rules of spec §5. Strict mode is for files at the app's own
- * version; lenient mode (unknown properties ignored) only for too-new files.
+ * version; lenient mode (unknown properties ignored) only for too-new files. The mixed
+ * reps/seconds rule skips tombstoned blocks; every other hard rule checks deleted records too.
  */
 export function validateFile(kind: FileKind, value: unknown, mode: ValidationMode = 'strict'): ValidationResult {
   const schemaIssues: ValidationIssue[] = [...Value.Errors(schemaFor(kind, mode), value)].map((e) => ({
@@ -95,7 +96,10 @@ function sessionHardRules(session: Session): ValidationIssue[] {
   session.blocks.forEach((block, bi) => {
     const bp = `/session/blocks/${bi}`;
     ids.push([block.id, `${bp}/id`]);
-    const live = block.sets.filter((s) => s.deletedAt === undefined);
+    // Spec §3: sets under a tombstoned block count as deleted, so a dead block can't quarantine
+    // the file over its metrics. Per-set rules below still run on every record, deleted or not,
+    // because a tombstone keeps the full record and must stay valid.
+    const live = block.deletedAt === undefined ? block.sets.filter((s) => s.deletedAt === undefined) : [];
     if (new Set(live.map((s) => ('reps' in s ? 'reps' : 'seconds'))).size > 1) {
       issues.push(hard(`${bp}/sets`, 'sets mix reps and seconds'));
     }
@@ -117,9 +121,11 @@ function sessionHardRules(session: Session): ValidationIssue[] {
 
 /**
  * Soft rules (spec §5): need the catalog, never quarantine. Tombstoned exercises resolve
- * (the catalog passed in must include them); deleted blocks and sets are skipped.
+ * (the catalog passed in must include them); deleted blocks and sets are skipped, and a
+ * tombstoned session yields no issues because everything under it counts as deleted (spec §3).
  */
 export function checkCatalogRules(session: Session, catalog: readonly Exercise[]): ValidationIssue[] {
+  if (session.deletedAt !== undefined) return [];
   const byId = new Map(catalog.map((e) => [e.id, e]));
   const issues: ValidationIssue[] = [];
   session.blocks.forEach((block, bi) => {

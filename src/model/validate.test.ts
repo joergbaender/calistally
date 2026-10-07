@@ -56,6 +56,11 @@ describe('validateFile: hard rules', () => {
     expect(validateFile('session', sessionFile(session([ok]))).ok).toBe(true);
   });
 
+  it('skips the mixed reps/seconds rule for a tombstoned block', () => {
+    const dead = block([set({ order: 0 }), timedSet({ order: 1 })], { deletedAt: T0 });
+    expect(validateFile('session', sessionFile(session([dead]))).ok).toBe(true);
+  });
+
   it.each([
     ['bodyweight with kg', set({ loadType: 'bodyweight', loadKg: 5 })],
     ['added with 0 kg', set({ loadType: 'added', loadKg: 0 })],
@@ -87,6 +92,17 @@ describe('validateFile: hard rules', () => {
     expect(hardPaths('session', sessionFile(s))).toEqual(['/session/blocks/1/sets/0/id']);
   });
 
+  it('rejects a set id equal to the session id, at the set path', () => {
+    const id = uuid();
+    const s = session([block([set({ id })])], { id });
+    expect(hardPaths('session', sessionFile(s))).toEqual(['/session/blocks/0/sets/0/id']);
+  });
+
+  it('rejects duplicate bodyweight entry ids', () => {
+    const id = uuid();
+    expect(hardPaths('bodyweight', bodyweightFile([bodyweight({ id }), bodyweight({ id })]))).toEqual(['/entries/1/id']);
+  });
+
   it('rejects duplicate exercise ids', () => {
     expect(hardPaths('exercises', exercisesFile([exercise(), exercise()]))).toEqual(['/exercises/1/id']);
   });
@@ -97,6 +113,11 @@ describe('validateForWrite', () => {
     const fine = sessionFile(session([block([{ ...set(), note: undefined } as never])]));
     expect(validateForWrite('session', fine).ok).toBe(true);
     const bad = sessionFile(session([block([set({ order: Number.POSITIVE_INFINITY })])]));
+    expect(validateForWrite('session', bad).ok).toBe(false);
+  });
+
+  it('rejects NaN, which the JSON form turns into null', () => {
+    const bad = sessionFile(session([block([set({ loadType: 'external', loadKg: Number.NaN })])]));
     expect(validateForWrite('session', bad).ok).toBe(false);
   });
 });
@@ -121,6 +142,11 @@ describe('checkCatalogRules (soft)', () => {
       block(ladder([5]), { exerciseId: 'nope', deletedAt: T0 }),
       block([set({ deletedAt: T0 })], { exerciseId: 'plank', order: 1 }),
     ]);
+    expect(checkCatalogRules(s, catalog)).toEqual([]);
+  });
+
+  it('returns no issues for a tombstoned session', () => {
+    const s = session([block(ladder([5]), { exerciseId: 'nope' })], { deletedAt: T0 });
     expect(checkCatalogRules(s, catalog)).toEqual([]);
   });
 });
