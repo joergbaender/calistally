@@ -9,6 +9,9 @@ export type ReadStatus = 'ok' | 'read-only' | 'needs-update' | 'quarantined';
 
 export interface ReadResult {
   status: ReadStatus;
+  /** The version the file was stored at (undefined if missing or invalid). For 'ok',
+   *  `file.schemaVersion` is already MODEL_VERSION; a lower `version` means the file was
+   *  upgraded in memory and the next write re-stamps it at MODEL_VERSION. */
   version: number | undefined;
   /** The upgraded file for 'ok'; the raw input otherwise. */
   file: unknown;

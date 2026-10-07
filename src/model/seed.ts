@@ -2,7 +2,7 @@ import seedJson from './seed-exercises.json';
 import type { Exercise } from './types';
 
 /** The developer seed (spec §5). Validated by seed.test.ts; the json import is typed loosely. */
-export const SEED: Exercise[] = seedJson as unknown as Exercise[];
+export const SEED: readonly Exercise[] = seedJson as unknown as readonly Exercise[];
 
 export interface SeedMergeResult {
   catalog: Exercise[];

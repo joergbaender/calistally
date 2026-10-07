@@ -54,6 +54,8 @@ describe('order helpers', () => {
   it('nextOrder is 0 for no siblings and max + 1 otherwise, deleted siblings included', () => {
     expect(nextOrder([])).toBe(0);
     expect(nextOrder([{ order: 2 }, { order: 5 }, { order: 0.5 }])).toBe(6);
+    const siblings = [{ order: 2 }, { order: 7, deletedAt: T0 }, { order: 5 }];
+    expect(nextOrder(siblings)).toBe(8);
   });
 
   it('orderBetween is the midpoint', () => {

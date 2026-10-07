@@ -1,7 +1,9 @@
 import { MODEL_VERSION } from './schema';
 import type { FileKind } from './types';
 
-export type UpgradeStep = (file: Record<string, unknown>) => Record<string, unknown>;
+/** Upgrades one file by one version. A step must return a new object and must not mutate its
+ *  input: on failure the caller still holds the raw file (e.g. for quarantine). */
+export type UpgradeStep =(file: Record<string, unknown>) => Record<string, unknown>;
 
 /** UPGRADE_STEPS[kind][n] upgrades a file of that kind from version n to n + 1.
  *  Whenever MODEL_VERSION is bumped, add a step for every kind, a no-op where nothing changed. */
