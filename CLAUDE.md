@@ -48,7 +48,7 @@ Training data, the XLSX (`*.xlsx` is gitignored), Dropbox tokens, `.env` files, 
 
 ## Planned stack
 
-Vite + TypeScript PWA (chart library not chosen yet). Hosting: GitHub Pages or Cloudflare Pages (open question, spec 3). Migration script (spec 2) in Node or Python, validating against `schema/*.schema.json`.
+Vite + TypeScript PWA (chart library not chosen yet). Hosting: GitHub Pages or Cloudflare Pages (open question, spec 3). Migration script (spec 2) in Node or Python. `schema/*.schema.json` is necessary but not sufficient: the hard rules (real calendar dates and timestamps, unique ids, load rules and so on) are deliberately not in the JSON Schema (D13), so every migrated file must also pass `validateFile` (or a faithful reimplementation of the hard rules in `src/model/validate.ts`). Timestamps are exactly `YYYY-MM-DDTHH:mm:ss.sssZ` (milliseconds, `Z`); uuids are lowercase.
 
 ## To fill in later
 
