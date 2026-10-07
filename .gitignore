@@ -43,6 +43,9 @@ venv/
 Thumbs.db
 desktop.ini
 
+# Local agent workspace (also ignored by its own nested .gitignore)
+.superpowers/
+
 # Spreadsheet artifacts (source data stays in Dropbox, not in git)
 *.xlsx
 ~$*.xlsx
