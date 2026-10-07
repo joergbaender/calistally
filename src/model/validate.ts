@@ -1,6 +1,6 @@
 import type { TSchema } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
-import { Lenient, Strict } from './schema';
+import { Lenient, Strict, TIMESTAMP_PATTERN } from './schema';
 import type { BodyweightFile, Exercise, ExercisesFile, FileKind, Session, SessionFile } from './types';
 
 export type IssueLevel = 'schema' | 'hard' | 'soft';
@@ -58,6 +58,16 @@ export function isCalendarDate(date: string): boolean {
   return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d;
 }
 
+const TIMESTAMP_RE = new RegExp(TIMESTAMP_PATTERN);
+
+/** The fixed format of spec §3 AND a real instant: rejects month 13, hour 25, Feb 30 and
+ *  T24:00:00, which the pattern alone lets through (V8 rolls or throws on them). */
+export function isTimestamp(t: string): boolean {
+  if (!TIMESTAMP_RE.test(t)) return false;
+  const ms = Date.parse(t);
+  return !Number.isNaN(ms) && new Date(ms).toISOString() === t;
+}
+
 const hard = (path: string, message: string): ValidationIssue => ({ level: 'hard', path, message });
 const soft = (path: string, message: string): ValidationIssue => ({ level: 'soft', path, message });
 
@@ -72,16 +82,30 @@ function duplicateIds(entries: [id: string, path: string][]): ValidationIssue[] 
   return issues;
 }
 
+/** Every timestamp field of one record (deleted or not) must be a real instant. */
+function timestampIssues(path: string, record: object, fields: readonly string[]): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  for (const field of fields) {
+    const t = (record as Record<string, unknown>)[field];
+    if (typeof t === 'string' && !isTimestamp(t)) issues.push(hard(`${path}/${field}`, `not a valid timestamp: ${t}`));
+  }
+  return issues;
+}
+
+const META_STAMPS = ['updatedAt', 'deletedAt'] as const;
+
 function hardRules(kind: FileKind, value: unknown): ValidationIssue[] {
   if (kind === 'exercises') {
     const file = value as ExercisesFile;
-    return duplicateIds(file.exercises.map((e, i) => [e.id, `/exercises/${i}/id`]));
+    const issues = file.exercises.flatMap((e, i) => timestampIssues(`/exercises/${i}`, e, META_STAMPS));
+    return [...issues, ...duplicateIds(file.exercises.map((e, i) => [e.id, `/exercises/${i}/id`]))];
   }
   if (kind === 'bodyweight') {
     const file = value as BodyweightFile;
-    const issues = file.entries.flatMap((e, i) =>
-      isCalendarDate(e.date) ? [] : [hard(`/entries/${i}/date`, `not a calendar date: ${e.date}`)],
-    );
+    const issues = file.entries.flatMap((e, i) => [
+      ...(isCalendarDate(e.date) ? [] : [hard(`/entries/${i}/date`, `not a calendar date: ${e.date}`)]),
+      ...timestampIssues(`/entries/${i}`, e, META_STAMPS),
+    ]);
     return [...issues, ...duplicateIds(file.entries.map((e, i) => [e.id, `/entries/${i}/id`]))];
   }
   return sessionHardRules((value as SessionFile).session);
@@ -92,11 +116,13 @@ function sessionHardRules(session: Session): ValidationIssue[] {
   const migrated = session.source === 'migrated';
   if (!isCalendarDate(session.date)) issues.push(hard('/session/date', `not a calendar date: ${session.date}`));
   if (session.dateUncertain && !migrated) issues.push(hard('/session/dateUncertain', 'only allowed in migrated sessions'));
+  issues.push(...timestampIssues('/session', session, [...META_STAMPS, 'startedAt']));
 
   const ids: [string, string][] = [[session.id, '/session/id']];
   session.blocks.forEach((block, bi) => {
     const bp = `/session/blocks/${bi}`;
     ids.push([block.id, `${bp}/id`]);
+    issues.push(...timestampIssues(bp, block, META_STAMPS));
     // Spec §3: sets under a tombstoned block or session count as deleted, so dead records can't
     // quarantine the file over their metrics. Per-set rules below still run on every record,
     // deleted or not, because a tombstone keeps the full record and must stay valid.
@@ -108,6 +134,7 @@ function sessionHardRules(session: Session): ValidationIssue[] {
     block.sets.forEach((s, si) => {
       const sp = `${bp}/sets/${si}`;
       ids.push([s.id, `${sp}/id`]);
+      issues.push(...timestampIssues(sp, s, [...META_STAMPS, 'completedAt']));
       if (s.loadType === 'bodyweight' && s.loadKg !== 0) issues.push(hard(`${sp}/loadKg`, 'must be 0 for bodyweight'));
       if ((s.loadType === 'added' || s.loadType === 'assist') && s.loadKg <= 0) {
         issues.push(hard(`${sp}/loadKg`, `must be > 0 for ${s.loadType}`));

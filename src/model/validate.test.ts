@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkCatalogRules, isCalendarDate, validateFile, validateForWrite } from './validate';
+import { checkCatalogRules, isCalendarDate, isTimestamp, validateFile, validateForWrite } from './validate';
 import {
   T0, block, bodyweight, bodyweightFile, exercise, exercisesFile, ladder, session, sessionFile, set, timedSet, uuid,
 } from './test-fixtures';
@@ -11,6 +11,18 @@ describe('isCalendarDate', () => {
   it.each(['2031-02-29', '2030-02-30', '2030-13-01', '2030-00-10', '2030-1-1', 'x'])('rejects %s', (d) =>
     expect(isCalendarDate(d)).toBe(false),
   );
+});
+
+describe('isTimestamp', () => {
+  it('accepts a valid timestamp', () => expect(isTimestamp('2030-02-28T23:59:59.999Z')).toBe(true));
+  it.each([
+    '2030-13-01T10:00:00.000Z',
+    '2030-01-01T25:00:00.000Z',
+    '2030-02-30T10:00:00.000Z',
+    '2030-01-01T24:00:00.000Z',
+    '2030-01-01T10:00:00Z',
+    'x',
+  ])('rejects %s', (t) => expect(isTimestamp(t)).toBe(false));
 });
 
 describe('validateFile: schema level', () => {
@@ -114,6 +126,32 @@ describe('validateFile: hard rules', () => {
 
   it('rejects duplicate exercise ids', () => {
     expect(hardPaths('exercises', exercisesFile([exercise(), exercise()]))).toEqual(['/exercises/1/id']);
+  });
+
+  it('rejects an impossible timestamp in an exercises file, on deleted records too', () => {
+    const file = exercisesFile([
+      exercise({ updatedAt: '2030-13-01T10:00:00.000Z' }),
+      exercise({ id: 'dips', name: 'Dips', deletedAt: '2030-02-30T10:00:00.000Z' }),
+    ]);
+    expect(hardPaths('exercises', file)).toEqual(['/exercises/0/updatedAt', '/exercises/1/deletedAt']);
+  });
+
+  it('rejects an impossible timestamp in a bodyweight file', () => {
+    const file = bodyweightFile([bodyweight(), bodyweight({ updatedAt: '2030-01-01T25:00:00.000Z' })]);
+    expect(hardPaths('bodyweight', file)).toEqual(['/entries/1/updatedAt']);
+  });
+
+  it('rejects an impossible timestamp anywhere in a session file, on deleted records too', () => {
+    const bad = '2030-01-01T24:00:00.000Z';
+    const sets = [set({ order: 0 }), set({ order: 1, completedAt: bad, deletedAt: T0 })];
+    const s = session([block(sets, { deletedAt: bad })], { startedAt: bad, updatedAt: bad, deletedAt: bad });
+    expect(hardPaths('session', sessionFile(s))).toEqual([
+      '/session/updatedAt',
+      '/session/deletedAt',
+      '/session/startedAt',
+      '/session/blocks/0/deletedAt',
+      '/session/blocks/0/sets/1/completedAt',
+    ]);
   });
 });
 
