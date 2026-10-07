@@ -2,7 +2,7 @@
 
 A calisthenics training tracker built as a static PWA. It reads and writes JSON data files in the user's Dropbox through the Dropbox API (App folder, OAuth 2 PKCE). There is no backend and no paid infrastructure. It replaces a free-text XLSX log.
 
-**Status:** spec 1 (data model) and spec 2 (XLSX migration script) implemented as tested TypeScript under `src/model/` and `src/migration/`. The migration has not yet been run to FINAL against the real workbook. No UI, no sync yet.
+**Status:** spec 1 (data model) and spec 2 (XLSX migration script) implemented as tested TypeScript under `src/model/` and `src/migration/`. The real migration run reached FINAL on 2026-10-07 (147 sessions, 24 decisions); its output sits outside git and still has to get into the Dropbox App folder (spec 3 decides how). No UI, no sync yet; spec 3 (sync and hosting) is in progress.
 
 ## Read first
 
