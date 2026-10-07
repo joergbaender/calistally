@@ -20,6 +20,11 @@ describe('liveSets (spec §7 sibling order)', () => {
     const second = set({ order: 1 });
     expect(liveSets(block([second, first]))[0]).toBe(first);
   });
+
+  it('ignores children of a tombstoned parent block (spec §7)', () => {
+    const live = set({ order: 0 });
+    expect(liveSets(block([live], { deletedAt: T0 }))).toEqual([]);
+  });
 });
 
 describe('liveBlocks', () => {
@@ -29,6 +34,11 @@ describe('liveBlocks', () => {
     const b3 = block([], { order: 1, deletedAt: T0 });
     expect(liveBlocks(session([b1, b2, b3]))).toEqual([b2, b1]);
   });
+
+  it('ignores children of a tombstoned parent session (spec §7)', () => {
+    const live = block([], { order: 0 });
+    expect(liveBlocks(session([live], { deletedAt: T0 }))).toEqual([]);
+  });
 });
 
 describe('session order (spec §7)', () => {
@@ -37,6 +47,14 @@ describe('session order (spec §7)', () => {
     const s = session([block([set({ completedAt: at('10:30'), order: 0 }), set({ completedAt: at('10:10'), order: 1 })])]);
     expect(sessionTimeKey(s)).toBe(at('10:10'));
     expect(sessionTimeKey(session())).toBeUndefined();
+  });
+
+  it('ignores deleted sets and sets in tombstoned blocks (spec §9)', () => {
+    const deletedSet = set({ completedAt: at('10:00'), order: 0, deletedAt: T0 });
+    const liveSet = set({ completedAt: at('10:10'), order: 1 });
+    const deletedBlock = block([set({ completedAt: at('09:00'), order: 0 })], { deletedAt: T0 });
+    const s = session([block([deletedSet, liveSet]), deletedBlock]);
+    expect(sessionTimeKey(s)).toBe(at('10:10'));
   });
 
   it('orders by date before time key', () => {

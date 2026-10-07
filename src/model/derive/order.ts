@@ -18,11 +18,15 @@ export function compareBlocks(a: Block, b: Block): number {
   return a.order !== b.order ? a.order - b.order : byId(a, b);
 }
 
+/** Non-deleted sets in a non-deleted block, in canonical order. */
 export function liveSets(block: Block): WorkoutSet[] {
+  if (block.deletedAt !== undefined) return [];
   return block.sets.filter((s) => s.deletedAt === undefined).sort(compareSets);
 }
 
+/** Non-deleted blocks in a non-deleted session, in canonical order. */
 export function liveBlocks(session: Session): Block[] {
+  if (session.deletedAt !== undefined) return [];
   return session.blocks.filter((b) => b.deletedAt === undefined).sort(compareBlocks);
 }
 
