@@ -29,7 +29,8 @@ function schemaFor(kind: FileKind, mode: ValidationMode): TSchema {
 /**
  * Schema check, then the hard rules of spec §5. Strict mode is for files at the app's own
  * version; lenient mode (unknown properties ignored) only for too-new files. The mixed
- * reps/seconds rule skips tombstoned blocks; every other hard rule checks deleted records too.
+ * reps/seconds rule skips tombstoned blocks and every block of a tombstoned session; every
+ * other hard rule checks deleted records too.
  */
 export function validateFile(kind: FileKind, value: unknown, mode: ValidationMode = 'strict'): ValidationResult {
   const schemaIssues: ValidationIssue[] = [...Value.Errors(schemaFor(kind, mode), value)].map((e) => ({
@@ -96,10 +97,11 @@ function sessionHardRules(session: Session): ValidationIssue[] {
   session.blocks.forEach((block, bi) => {
     const bp = `/session/blocks/${bi}`;
     ids.push([block.id, `${bp}/id`]);
-    // Spec §3: sets under a tombstoned block count as deleted, so a dead block can't quarantine
-    // the file over its metrics. Per-set rules below still run on every record, deleted or not,
-    // because a tombstone keeps the full record and must stay valid.
-    const live = block.deletedAt === undefined ? block.sets.filter((s) => s.deletedAt === undefined) : [];
+    // Spec §3: sets under a tombstoned block or session count as deleted, so dead records can't
+    // quarantine the file over their metrics. Per-set rules below still run on every record,
+    // deleted or not, because a tombstone keeps the full record and must stay valid.
+    const parentDeleted = session.deletedAt !== undefined || block.deletedAt !== undefined;
+    const live = parentDeleted ? [] : block.sets.filter((s) => s.deletedAt === undefined);
     if (new Set(live.map((s) => ('reps' in s ? 'reps' : 'seconds'))).size > 1) {
       issues.push(hard(`${bp}/sets`, 'sets mix reps and seconds'));
     }

@@ -61,6 +61,11 @@ describe('validateFile: hard rules', () => {
     expect(validateFile('session', sessionFile(session([dead]))).ok).toBe(true);
   });
 
+  it('skips the mixed reps/seconds rule for every block of a tombstoned session', () => {
+    const mixed = block([set({ order: 0 }), timedSet({ order: 1 })]);
+    expect(validateFile('session', sessionFile(session([mixed], { deletedAt: T0 }))).ok).toBe(true);
+  });
+
   it.each([
     ['bodyweight with kg', set({ loadType: 'bodyweight', loadKg: 5 })],
     ['added with 0 kg', set({ loadType: 'added', loadKg: 0 })],
