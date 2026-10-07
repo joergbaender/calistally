@@ -152,6 +152,17 @@ describe('buildSessions: dates', () => {
     expect(r.review.map((i) => [i.kind, i.key])).toEqual([['date-unreadable', 'A7']]);
   });
 
+  it('D3: skipping a dated Extra cell drops that Extra session', () => {
+    const r = build({ F6: d('2030-06-05'), G6: 'Dips 10x', J6: '07.06.2030 Pullups 5x' }, { J6: { skip: true } });
+    expect(r.sessions.map((s) => [s.date, s.label])).toEqual([['2030-06-05', 'push']]);
+    expect(r.report).toContainEqual({ kind: 'skipped', where: 'J6', detail: 'cell skipped by decision: "Pullups 5x"' });
+    expect(r.report).toContainEqual({ kind: 'skipped', where: 'J6', detail: 'Extra session dropped: its cell was skipped by decision' });
+    expect(r.review).toEqual([]);
+    const earlier = build({ F6: d('2030-06-05'), G6: 'Dips 10x', J6: '01.06.2030 Pullups 5x' }, { J6: { skip: true } });
+    expect(earlier.bodyweight[0]?.date).toBe('2030-06-05');
+    expect(earlier.review).toEqual([]);
+  });
+
   it('a date decision also works on an Extra cell', () => {
     const r = build({ F6: d('2030-06-05'), G6: 'Dips 10x', J6: '07.06.2030 Pullups 5x' }, { J6: { date: '2030-06-08' } });
     expect(r.sessions[1]?.date).toBe('2030-06-08');

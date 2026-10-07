@@ -109,6 +109,15 @@ export function buildSessions(
   const sessions: Session[] = [];
   for (const row of rows) {
     const rd = resolved.get(row.key)!;
+    // D3: a dated Extra session whose only cell is skipped is not emitted; its date items go with it.
+    const only = row.cells[0];
+    if (row.block === 'Extra' && row.cells.length === 1 && only !== undefined && decisions[only.address]?.skip === true) {
+      use(only.address, 'skip');
+      seenKeys.add(only.address);
+      report.push({ kind: 'skipped', where: only.address, detail: `cell skipped by decision: ${JSON.stringify(only.text)}` });
+      report.push({ kind: 'skipped', where: only.address, detail: 'Extra session dropped: its cell was skipped by decision' });
+      continue;
+    }
     for (const repair of rd.repairs) {
       report.push({ kind: 'repair', where: row.dateAddress, detail: `date "${row.dateCell?.value ?? ''}" → ${rd.date} (${repair})` });
     }
