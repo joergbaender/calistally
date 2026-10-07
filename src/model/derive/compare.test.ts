@@ -13,7 +13,7 @@ describe('compareBlockPair (spec §7 ↑↓ per block)', () => {
   });
 
   it('amount is same after rounding decimals', () => {
-    expect(compareBlockPair(pullups([16.5, 17.2]), pullups([17.2, 16.5])).amount).toBe('same');
+    expect(compareBlockPair(pullups([0.1, 0.2]), pullups([0.3])).amount).toBe('same');
   });
 
   it('amount compares totalSeconds for timed exercises', () => {
@@ -99,6 +99,19 @@ describe('blockIndicator and exerciseIndicator', () => {
     expect(exerciseIndicator([today], today, 'pull-ups')).toBe('none');
     const noteOnly = session([block([], { note: 'Pyramide' })], { date: day(1), source: 'migrated' });
     expect(exerciseIndicator([noteOnly, today], today, 'pull-ups')).toBe('none');
+  });
+
+  it('exercise indicator is none when the current session has no live block of the exercise', () => {
+    const noPullups = session([block(ladder([5]), { exerciseId: 'dips' }), pullups([9], 1)], { date: day(3) });
+    noPullups.blocks[1] = { ...noPullups.blocks[1]!, deletedAt: T0 };
+    expect(exerciseIndicator([...all, noPullups], noPullups, 'pull-ups')).toBe('none');
+  });
+
+  it('exercise indicator skips an earlier session whose blocks of X are empty and note-less', () => {
+    const real = session([pullups([10])], { date: day(1) });
+    const emptyOnly = session([block([]), block([set({ deletedAt: T0 })], { order: 1 })], { date: day(2) });
+    const current = session([pullups([6])], { date: day(3) });
+    expect(exerciseIndicator([real, emptyOnly, current], current, 'pull-ups')).toBe('down');
   });
 
   it('blockIndicator is none for a block that is not in the session', () => {

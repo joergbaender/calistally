@@ -30,12 +30,17 @@ export function liveBlocks(session: Session): Block[] {
   return session.blocks.filter((b) => b.deletedAt === undefined).sort(compareBlocks);
 }
 
+/** completedAt of every live set in every live block, in canonical block/set order. */
+export function completedStamps(session: Session): string[] {
+  return liveBlocks(session)
+    .flatMap(liveSets)
+    .flatMap((s) => (s.completedAt === undefined ? [] : [s.completedAt]));
+}
+
 /** startedAt, else the earliest completedAt among live sets, else undefined. */
 export function sessionTimeKey(session: Session): string | undefined {
   if (session.startedAt !== undefined) return session.startedAt;
-  const stamps = liveBlocks(session)
-    .flatMap(liveSets)
-    .flatMap((s) => (s.completedAt === undefined ? [] : [s.completedAt]));
+  const stamps = completedStamps(session);
   return stamps.length === 0 ? undefined : stamps.reduce((a, b) => (a < b ? a : b));
 }
 

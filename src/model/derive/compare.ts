@@ -65,9 +65,21 @@ export function blockIndicator(sessions: readonly Session[], session: Session, b
   return compareBlockPair(block, previousOccurrence(sessions, session, block.exerciseId, n));
 }
 
-/** Spec §7 ↑↓ per exercise: session total against the most recent earlier session with that exercise. */
+/** A live block of X that is evidence of training X: it has live sets or a note. An empty,
+ *  note-less block (spec §6: nothing logged in it yet) is not. */
+function hasEvidence(block: Block): boolean {
+  return liveSets(block).length > 0 || block.note !== undefined;
+}
+
+/**
+ * Spec §7 ↑↓ per exercise: session total against the most recent earlier session with that
+ * exercise. 'none' when the current session has no live block of X; earlier sessions whose
+ * blocks of X are all empty and note-less are skipped. A note-only block still counts, and a
+ * migrated one yields 'none' via the unknown total.
+ */
 export function exerciseIndicator(sessions: readonly Session[], session: Session, exerciseId: string): AmountIndicator {
-  const previous = earlierSessions(sessions, session).find((s) => blocksOf(s, exerciseId).length > 0);
+  if (blocksOf(session, exerciseId).length === 0) return 'none';
+  const previous = earlierSessions(sessions, session).find((s) => blocksOf(s, exerciseId).some(hasEvidence));
   if (previous === undefined) return 'none';
   const c = exerciseSessionTotal(session, exerciseId);
   const p = exerciseSessionTotal(previous, exerciseId);

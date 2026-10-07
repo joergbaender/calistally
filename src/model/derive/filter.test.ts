@@ -32,6 +32,12 @@ describe('sessionChips and matchesChip (spec §7 day-list filter)', () => {
     expect(matchesChip(s, catalog, 'push')).toBe(false);
   });
 
+  it('a tombstoned session matches no chip, not even all', () => {
+    const dead = session([block(ladder([5]), { exerciseId: 'dips-bar' })], { deletedAt: T0 });
+    expect(matchesChip(dead, catalog, 'all')).toBe(false);
+    expect(matchesChip(dead, catalog, 'push')).toBe(false);
+  });
+
   it('uses a tombstoned exercise\'s pattern', () => {
     expect(matchesChip(session([block(ladder([5]), { exerciseId: 'squats' })]), catalog, 'legs')).toBe(true);
   });

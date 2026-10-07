@@ -19,6 +19,8 @@ export function sessionChips(session: Session, catalog: readonly Exercise[]): Se
   );
 }
 
+/** A tombstoned session matches no chip, 'all' included (spec §7: functions ignore tombstones). */
 export function matchesChip(session: Session, catalog: readonly Exercise[], chip: Chip | 'all'): boolean {
+  if (session.deletedAt !== undefined) return false;
   return chip === 'all' || sessionChips(session, catalog).has(chip);
 }

@@ -39,8 +39,17 @@ describe('setIntervals (spec §7)', () => {
     const dead = set({ order: 2, completedAt: at('10:06:00'), deletedAt: T0 });
     const c = set({ order: 3, completedAt: at('10:07:00') });
     const m = setIntervals(session([block([a, b, dead, c])]));
+    expect(m.get(a.id)).toBeUndefined();
     expect(m.get(b.id)).toBeUndefined();
     expect(m.get(c.id)).toBe(420);
+  });
+
+  it('does not measure a block\'s first set against the block\'s own later sets', () => {
+    const a = set({ order: 0, completedAt: at('10:05:00') });
+    const b = set({ order: 1, completedAt: at('10:00:00') });
+    const m = setIntervals(session([block([a, b])]));
+    expect(m.get(a.id)).toBeUndefined();
+    expect(m.size).toBe(0);
   });
 
   it('spans midnight', () => {
