@@ -56,10 +56,51 @@ export function buildModel(strict: boolean) {
     note: Type.Optional(Text),
   });
 
+  const setCommon = {
+    ...meta,
+    id: Uuid,
+    order: Type.Number(),
+    loadType: literals(LOAD_TYPES),
+    loadKg: NonNegative,
+    completedAt: Type.Optional(Timestamp),
+    restSec: Type.Optional(NonNegative),
+    aggregate: Type.Optional(Type.Literal(true)),
+    note: Type.Optional(Text),
+  };
+  // "Exactly one of reps / seconds" as a union of two strict shapes: a set with both fails
+  // both branches because each branch rejects the other's property.
+  const RepsSet = obj({ ...setCommon, reps: Positive });
+  const SecondsSet = obj({ ...setCommon, seconds: Positive });
+  const WorkoutSet = Type.Union([RepsSet, SecondsSet]);
+
+  const Block = obj({
+    ...meta,
+    id: Uuid,
+    order: Type.Number(),
+    exerciseId: Type.String({ pattern: EXERCISE_ID_PATTERN }),
+    note: Type.Optional(Text),
+    sets: Type.Array(WorkoutSet),
+  });
+
+  const Session = obj({
+    ...meta,
+    id: Uuid,
+    date: DateString,
+    dateUncertain: Type.Optional(Type.Literal(true)),
+    startedAt: Type.Optional(Timestamp),
+    label: Type.Optional(literals(SESSION_LABELS)),
+    notes: Type.Optional(Text),
+    tags: Type.Array(Text),
+    source: literals(['app', 'migrated'] as const),
+    blocks: Type.Array(Block),
+  });
+
+  const SessionFile = obj({ schemaVersion: Version, session: Session });
+
   const ExercisesFile = obj({ schemaVersion: Version, exercises: Type.Array(Exercise) });
   const BodyweightFile = obj({ schemaVersion: Version, entries: Type.Array(BodyweightEntry) });
 
-  return { Exercise, BodyweightEntry, ExercisesFile, BodyweightFile };
+  return { Exercise, BodyweightEntry, WorkoutSet, Block, Session, ExercisesFile, BodyweightFile, SessionFile };
 }
 
 export const Strict = buildModel(true);

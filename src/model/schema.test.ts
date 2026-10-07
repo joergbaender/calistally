@@ -1,7 +1,7 @@
 import { Value } from '@sinclair/typebox/value';
 import { describe, expect, it } from 'vitest';
 import { Lenient, MODEL_VERSION, Strict } from './schema';
-import { T0, bodyweight, bodyweightFile, exercise, exercisesFile } from './test-fixtures';
+import { T0, bodyweight, bodyweightFile, block, exercise, exercisesFile, ladder, session, sessionFile, set, timedSet } from './test-fixtures';
 
 describe('model version', () => {
   it('starts at 1', () => {
@@ -78,5 +78,70 @@ describe('file wrappers', () => {
 
   it('rejects an unknown top-level property', () => {
     expect(Value.Check(Strict.ExercisesFile, { ...exercisesFile(), extra: 1 })).toBe(false);
+  });
+});
+
+describe('WorkoutSet schema', () => {
+  it('accepts a reps set and a timed set', () => {
+    expect(Value.Check(Strict.WorkoutSet, set())).toBe(true);
+    expect(Value.Check(Strict.WorkoutSet, timedSet())).toBe(true);
+  });
+
+  it('accepts decimal reps', () => {
+    expect(Value.Check(Strict.WorkoutSet, set({ reps: 16.5 }))).toBe(true);
+  });
+
+  it('accepts every optional field', () => {
+    const s = set({ completedAt: T0, note: 'deep' });
+    expect(Value.Check(Strict.WorkoutSet, s)).toBe(true);
+    expect(Value.Check(Strict.WorkoutSet, set({ restSec: 120, aggregate: true }))).toBe(true);
+  });
+
+  it.each([
+    ['both reps and seconds', { ...set(), seconds: 30 }],
+    ['neither reps nor seconds', { ...set(), reps: undefined }],
+    ['0 reps', set({ reps: 0 })],
+    ['negative loadKg', set({ loadKg: -1 })],
+    ['aggregate: false', { ...set(), aggregate: false }],
+    ['an unknown load type', { ...set(), loadType: 'chains' }],
+    ['a side field', { ...set(), side: 'L' }],
+    ['an unknown property', { ...set(), colour: 'red' }],
+  ])('rejects %s', (_label, value) => {
+    // JSON round trip: `reps: undefined` becomes a missing key, as it would in the file.
+    expect(Value.Check(Strict.WorkoutSet, JSON.parse(JSON.stringify(value)))).toBe(false);
+  });
+
+  it('ignores an unknown property in lenient mode', () => {
+    expect(Value.Check(Lenient.WorkoutSet, { ...set(), colour: 'red' })).toBe(true);
+  });
+});
+
+describe('Session schema', () => {
+  it('accepts a ladder session', () => {
+    const s = session([block(ladder([17, 16, 15, 10]))], { startedAt: T0, label: 'pull', notes: 'sick', tags: ['sick'] });
+    expect(Value.Check(Strict.Session, s)).toBe(true);
+    expect(Value.Check(Strict.SessionFile, sessionFile(s))).toBe(true);
+  });
+
+  it('accepts an empty session and an empty block', () => {
+    expect(Value.Check(Strict.Session, session())).toBe(true);
+    expect(Value.Check(Strict.Session, session([block()]))).toBe(true);
+  });
+
+  it.each([
+    ['dateUncertain: "yes"', { dateUncertain: 'yes' }],
+    ['a non-timestamp startedAt', { startedAt: '2030-01-01' }],
+    ['an unknown label', { label: 'arms' }],
+    ['an unknown source', { source: 'live' }],
+    ['an empty tag', { tags: [''] }],
+    ['missing tags', { tags: undefined }],
+    ['an unknown property', { colour: 'red' }],
+  ])('rejects %s', (_label, over) => {
+    const value = JSON.parse(JSON.stringify({ ...session(), ...over }));
+    expect(Value.Check(Strict.Session, value)).toBe(false);
+  });
+
+  it('rejects an unknown property on a block', () => {
+    expect(Value.Check(Strict.Session, session([{ ...block(), colour: 'red' } as never]))).toBe(false);
   });
 });
