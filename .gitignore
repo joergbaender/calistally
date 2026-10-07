@@ -49,3 +49,8 @@ desktop.ini
 # Spreadsheet artifacts (source data stays in Dropbox, not in git)
 *.xlsx
 ~$*.xlsx
+
+# Migration inputs and outputs (training data, never committed)
+decisions.json
+*.decisions.json
+migration-out/
