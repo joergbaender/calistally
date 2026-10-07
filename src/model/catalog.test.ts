@@ -12,6 +12,22 @@ describe('findByName', () => {
     expect(findByName([exercise(), dead], ' pull-UPS ')?.id).toBe('pull-ups');
     expect(findByName([exercise(), dead], 'dips')?.id).toBe('dips');
   });
+
+  it('prefers live exercise over tombstoned one with the same name', () => {
+    const tombstoned = exercise({ id: 'dips', name: 'Dips', deletedAt: T0 });
+    const live = exercise({ id: 'dips-bar', name: 'Dips' });
+    expect(findByName([tombstoned, live], 'dips')?.id).toBe('dips-bar');
+  });
+
+  it('createExercise with live and tombstoned same-name entries reuses live, leaves tombstone', () => {
+    const tombstoned = exercise({ id: 'dips', name: 'Dips', deletedAt: T0 });
+    const live = exercise({ id: 'dips-bar', name: 'Dips' });
+    const r = createExercise('Dips', fields, [tombstoned, live], later);
+    expect(r.existing).toBe(true);
+    expect(r.exercise.id).toBe('dips-bar');
+    expect(r.catalog).toHaveLength(2);
+    expect(r.catalog.find((e) => e.id === 'dips')?.deletedAt).toBe(T0);
+  });
 });
 
 describe('assignExerciseId', () => {

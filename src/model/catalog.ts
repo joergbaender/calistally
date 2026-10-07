@@ -2,10 +2,11 @@ import { touch, undelete } from './record';
 import { normalizeName, slugify } from './slug';
 import type { Exercise, Session } from './types';
 
-/** Any entry with that name, tombstoned and archived ones included (the caller decides what to do). */
+/** Finds entry by normalized name, preferring non-deleted matches (spec §3: names are unique only among non-deleted). */
 export function findByName(catalog: readonly Exercise[], name: string): Exercise | undefined {
   const wanted = normalizeName(name);
-  return catalog.find((e) => normalizeName(e.name) === wanted);
+  return catalog.find((e) => e.deletedAt === undefined && normalizeName(e.name) === wanted) ??
+         catalog.find((e) => normalizeName(e.name) === wanted);
 }
 
 /** The slug, or slug-2, slug-3 … if a different name already owns it (tombstones count). */
