@@ -16,7 +16,7 @@
 
 ## Global Constraints
 
-- Node.js LTS (22 or newer) must be installed; it is not installed on the dev PC at the time of writing (`winget` is).
+- Node.js LTS (22 or newer). Installed on the dev PC on 2026-10-07: v24.19.0 with npm 11.17.0 (winget `OpenJS.NodeJS.LTS`).
 - TypeScript `strict`, plus `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`. An optional field is **absent**, never `undefined`; helpers remove keys rather than set `undefined`.
 - `MODEL_VERSION = 1`. Every file carries `schemaVersion`.
 - Timestamps are UTC in exactly `YYYY-MM-DDTHH:mm:ss.sssZ` (`Date.prototype.toISOString()`); dates are `YYYY-MM-DD`.
@@ -51,17 +51,14 @@ Input classes the spec implies but no task's tests originally exercised. Each ha
 **Interfaces:**
 - Produces: `npm test` (Vitest), `npm run typecheck` (tsc), `MODEL_VERSION` from `src/model/schema.ts`.
 
-- [ ] **Step 1: Install Node.js LTS (ask the owner before installing system software)**
+- [ ] **Step 1: Confirm Node.js LTS is available**
 
 Run in PowerShell:
 ```powershell
-winget install OpenJS.NodeJS.LTS
+node --version   # expected: v24.19.0 (installed 2026-10-07); anything v22+ is fine
+npm --version    # expected: 11.x
 ```
-Open a **new** terminal afterwards so `PATH` is refreshed, then:
-```powershell
-node --version   # expected: v22.x or newer
-npm --version
-```
+If `node` is not found, it is only missing from this shell's `PATH`: open a new terminal. If it is missing from the machine, ask the owner before installing (`winget install OpenJS.NodeJS.LTS`).
 
 - [ ] **Step 2: Create `package.json`**
 
