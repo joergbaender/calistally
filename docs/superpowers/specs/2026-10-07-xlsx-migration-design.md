@@ -1,7 +1,7 @@
 # Spec 2: XLSX migration
 
 - **Date:** 2026-10-07
-- **Status:** awaiting the owner's review
+- **Status:** approved 2026-10-07; amended 2026-10-07 after implementation review
 - **Scope:** a one-off, deterministic script that turns the single-sheet workbook `Calisthenics_Tracker_2026.xlsx` into spec 1 files (session files, catalog, bodyweight), a review list for everything it cannot decide, and the small decisions file the owner answers it with. This spec covers **no upload to Dropbox, no UI and no sync**; the output is a local folder in the Dropbox layout of spec 1 §4.
 
 Builds on [spec 1](2026-10-06-data-model-design.md) (the target format; its hard rules win over anything here) and answers HANDOVER.md §5 and §6. Where HANDOVER.md disagrees with this spec, this spec wins.
@@ -58,7 +58,7 @@ writeOutput(dir, result)          files, review.md, report.md         (output I/
 
 **Grid.** `Map<CellAddress, { kind: 'text' | 'date'; value: string }>` where a date cell's value is `YYYY-MM-DD` (exceljs returns a `Date` at UTC midnight for date-formatted cells; the calendar day is taken from the UTC fields). Rich-text cells are flattened to their text. Formulas do not occur; if one does, its cached result is used.
 
-**CLI.** `npm run migrate -- --xlsx <path> --decisions <path> --out <dir>`. All three are required and have no defaults. `--out` inside the repository is refused. Exit code 0 only when the review list is empty (§9); otherwise the files are still written and the report is headed **NOT FINAL**.
+**CLI.** `npm run migrate -- --xlsx <path> --decisions <path> --out <dir>`. All three are required and have no defaults. A missing, mistyped or malformed option exits 2 with the usage line. `--out` inside the repository is refused, and so is an `--out` whose `sessions/` holds any file the migration did not write (not a `.json` file holding `{ session: { source: 'migrated' } }`): both exit 2 before anything is read or deleted, because the run replaces `sessions/` wholesale (§8). Exit code 0 only when the review list is empty (§9); otherwise the files are still written and the report is headed **NOT FINAL**.
 
 **Determinism.** Same inputs → byte-identical output (§8). This is what makes the review loop usable: after one decision, the diff shows exactly that decision's effect.
 
@@ -66,17 +66,17 @@ writeOutput(dir, result)          files, review.md, report.md         (output I/
 
 ## 4. From grid to sessions (structure rules)
 
-**Column blocks.** Pull: date `A`, exercises `B C D`, label `pull`. Push: date `F`, exercises `G H I`, Extra `J`, label `push`. Legs: date `L`, exercises `M N O`, label `legs`. Data rows run from 3 to the last row with any content. A row in a column block becomes one session if its date cell or any exercise cell is non-empty (for Push, a J cell counts only when it has no leading date; see below). A row with a date and no cells is an empty session and a review item (`empty-row`).
+**Column blocks.** Pull: date `A`, exercises `B C D`, label `pull`. Push: date `F`, exercises `G H I`, Extra `J`, label `push`. Legs: date `L`, exercises `M N O`, label `legs`. Data rows run from 3 to the last row with any content. A row in a column block becomes one session if its date cell or any exercise cell is non-empty (for Push, a J cell counts only when it has no leading date; see below). A row with a date and no cells is an empty session and a review item (`empty-row`). Any non-empty cell from row 3 down outside columns `A–D`, `F–J`, `L–O` is not migrated; it is a review item (`outside-blocks`, proposal: ignored; answer `accept`).
 
 **Label.** The column block's label, even when the row contains other patterns (row 40's jump squats on a pull day). Spec 1 D4: the label is display only; the day-list filter uses each block's exercise pattern. Extra-column sessions (below) get `other`.
 
-**Extra column `J`.** If the cell's first token is a date (`12.06.2026 Pullups …`, `09.07. 100x Dipbar Knee Raises`) the cell is its own session with that date and label `other`. Otherwise (`Lat Raise Bands 10kg 22x 22x`, `Overhead Press Bands …`) its blocks join the row's push session, after the `I` block. Header `Extra` is never an exercise fallback: a J line without an exercise alias is a review item (`unknown-exercise`).
+**Extra column `J`.** If the cell's first token is a date (`12.06.2026 Pullups …`, `09.07. 100x Dipbar Knee Raises`) the cell is its own session with that date and label `other`. Otherwise (`Lat Raise Bands 10kg 22x 22x`, `Overhead Press Bands …`) its blocks join the row's push session, after the `I` block. Header `Extra` is never an exercise fallback: a J line without an exercise alias is a review item (`unknown-exercise`). A J cell holding only a date is an empty Extra session with review item `empty-row`. A `skip` decision on a dated J cell drops that Extra session entirely (no file; report entry), and its date plays no part in the bodyweight date.
 
 **Cells to blocks.** Each non-empty line of a cell is parsed on its own (§5). A line that names an exercise uses it; a line without one falls back to the column header, **except** when the previous line of the same cell named an exercise and produced no sets: then the line continues that exercise (`Overhead Press Bands` followed by `10kg 15x 15x easy`). A line with neither numbers nor an exercise alias is note text for the preceding block of that cell (`nach Essen, voller Bauch`: tag plus note, §7). `dann …` opens a second block of the same exercise; `plus …` continues the current block; `nichts` yields nothing.
 
 **Block order.** Column order (`B`, `C`, `D`; `G`, `H`, `I`, `J`), then line order within a cell. A block whose line contains the phrase `vor den Australians` is moved to the front of the session (only pull-up blocks in C27–C29 carry it). `order` is then assigned 0, 1, 2, …; sets likewise within the block.
 
-**Dates.** A date cell of kind `date` is taken as-is. A text date accepts `d.m.yy`, `d.m.yyyy`, `.` or `,` as separator, repeated separators, surrounding spaces, and a missing year, which is completed with the sheet's year (2026, the only year in the file; it is a constant in the script, not detected). Two-digit years are `20yy`. Each such repair is a **report** entry, because the result is unambiguous. A three-digit year (`27.04.206`) is repaired by inserting the missing digit of the sheet year, but the result is a **review item** (`date-repaired-doubtful`) with `dateUncertain: true`. Any other text in a date cell is a review item (`date-unreadable`); the session is then treated as undated so it still has a file: above the first dated row it takes the rows-3–5 proposal below, elsewhere it takes the midpoint (rounded down) between the nearest dated rows above and below in its column block, or the row above plus one day at the end of the block. Both carry `dateUncertain: true`. (No such cell exists in the real file; the rule is here so the script never has an undefined case.)
+**Dates.** A date cell of kind `date` is taken as-is. A text date accepts `d.m.yy`, `d.m.yyyy`, `.` or `,` as separator, repeated separators, surrounding spaces, and a missing year, which is completed with the sheet's year (2026, the only year in the file; it is a constant in the script, not detected). Two-digit years are `20yy`. Each such repair is a **report** entry, because the result is unambiguous. A three-digit year (`27.04.206`) is repaired by inserting the missing digit of the sheet year, but the result is a **review item** (`date-repaired-doubtful`) with `dateUncertain: true`. Any other text in a date cell is a review item (`date-unreadable`); the session is then treated as undated so it still has a file: above the first dated row it takes the rows-3–5 proposal below, elsewhere the undated rows between two dated rows of its column block are spread evenly between them (the k-th of n undated rows gets `lower + floor(k·gap/(n+1))` days, `gap` being the days between the two dated rows; for a single row this is the midpoint, rounded down), and at the end of the block a row takes the row above plus one day. Both carry `dateUncertain: true`. (Even spreading rather than one shared midpoint: the owner, 2026-10-07.) (No such cell exists in the real file; the rule is here so the script never has an undefined case.)
 
 **Out-of-order and duplicate dates.** Within one column block the dates must increase strictly down the rows. For each violation the script proposes a repair only when a single edit restores the order: a month typo (`05.08` between `31.08` and `08.09` → `05.09`; `24.06` between `20.05` and `28.05`, and a duplicate of a later `24.06` → `24.05`). Where two rows are simply swapped (`06.07` above `03.07`) no proposal is made and both keep their written dates. In every case the session gets `dateUncertain: true` and a review item (`date-out-of-order`); a `dateExact: true` decision removes the flag, a `date` decision replaces the date. A duplicate date within a column block is always an item, even when the order holds.
 
@@ -142,7 +142,18 @@ An explicit `ohne` or `Bodyweight` on a set wins over this table for every exerc
 
 ### Failure
 
-A line the grammar cannot consume completely (an unknown word in a position where a number was expected, a dangling `mit`, a `LOAD` with no sets) is emitted as a **note-only block** whose `note` is the raw line, with review item `unparsed-line`. The output therefore always validates, and the item stays open until a `text` decision rewrites the line. An unknown word in a note position is not a failure: it goes to the block note and is listed in the report under "unrecognised words" so a misspelt exercise name is noticed.
+A line the grammar cannot consume completely is emitted as a **note-only block** whose `note` is the raw line, with review item `unparsed-line`. The output therefore always validates, and the item stays open until a `text` decision rewrites the line. The failing forms:
+
+- an unknown word in a position where a number was expected, or a dangling `mit`;
+- a `LOAD` no set uses (`Dips 6kg`, and `25kg Bodyweight 20x`, where `Bodyweight` takes the sets);
+- a `mit LOAD` that applies to no set (`20x mit 5kg mit 6kg`);
+- `nichts` together with numbers;
+- a leftover word containing a digit (`20x/15x`, `12xx`), never kept as a silent note;
+- numbers that would pair across an unrecognised word (`10x kurz 5` is not 5 sets of 10).
+
+A line the grammar cannot place is not always a failure: a leading line that is only note text attaches its note to the next block of the cell. In column `J`, a line that cannot be parsed or names no exercise has no header to fall back on: it is dropped, with review item `unknown-exercise` and a "dropped" proposal.
+
+An unknown word in a note position is not a failure: it goes to the block note and is listed in the report under "unrecognised words" so a misspelt exercise name is noticed.
 
 ## 6. Exercise detection and the seed
 
@@ -190,7 +201,7 @@ The seed stays at 24 entries. `exercises.json` in the output **is the seed**, un
 | `vor den Australians` | block order (§4); dropped |
 | every other leftover word | block `note`, original spelling and order (`schräger`, `Deeep`, `kurze Pause`, `Griffe`, `ohne Griffe`, `easy`, `Start with 1m Rest`, `every 2 minutes`) |
 
-Session `notes` = the raw row: one line per non-empty cell of the row, `<header>: <cell text>`, with the cell's own newlines kept, in column order. A J cell with a leading date belongs to its own Extra session, whose `notes` is that cell alone; it does not appear in the push row's `notes`. Decisions (`text`) do not change `notes`: it always holds what the sheet says. Tags are sorted and deduplicated.
+Session `notes` = the raw row: one line per non-empty cell of the row, `<header>: <cell text>`, with the cell's own newlines kept (CRLF and CR normalised to LF), in column order. A J cell with a leading date belongs to its own Extra session, whose `notes` is that cell alone; it does not appear in the push row's `notes`. Decisions (`text`) do not change `notes`: it always holds what the sheet says. Tags are sorted and deduplicated.
 
 ## 8. Ids, timestamps, output, validation
 
@@ -227,21 +238,22 @@ Sorted by column block and row. Each item: kind, cell address (and line index fo
 | `sets-exceed-reps` | `REPS NUM` with NUM > REPS |
 | `parenthesised-numbers` | `(R 1x 15)` |
 | `aggregate`, `note-only`, `pyramid-expanded` | spec 1 §6 reconstructions |
-| `stale-decision` | a decision for a cell that raises no item and whose `text`/`date`/`skip` changes nothing |
+| `outside-blocks` | a non-empty cell outside the column blocks (§4); proposal: ignored |
+| `stale-decision` | a decision with a field that has no effect (below) |
 
-Expected from the real file (confirmed by a prototype run while planning): 8 undated rows, 5 doubtful or out-of-order dates, 3 missing band loads (M33, O37 and C50 `10 down`, which the header fallback reads as curls), H38, M16, two aggregates, two note-only blocks, two pyramid expansions: 25 items. G9 raises none (13.2 reps is a legal value) and is answered by the prepared decision.
+Expected from the real file (confirmed by a prototype run while planning): 8 undated rows, 5 doubtful or out-of-order dates, 3 missing band loads (M33, O37 and C50 `10 down`, which the header fallback reads as curls), H38, M16, two aggregates, two note-only blocks, two pyramid expansions: 25 items. G9 raises none (13.2 reps is a legal value) and is answered by the prepared decision. The guards above (`outside-blocks`, the `J` cell rules of §4, the newer `unparsed-line` forms of §5, per-field stale decisions) were added after the prototype run, so the real run may raise more than these 25 items.
 
 ### Decisions file (`decisions.json`)
 
-Lives next to the XLSX, never in git. Keys are cell addresses, optionally with a 1-based line index for multi-line cells (`"M27#3"`). Values:
+Lives next to the XLSX, never in git. A leading UTF-8 byte order mark is accepted. Keys are cell addresses, optionally with a 1-based line index for multi-line cells (`"M27#3"`). Values:
 
 | Field | Effect |
 |---|---|
 | `text` | replaces the cell (or the line) before parsing |
-| `date` | replaces the row's date (`YYYY-MM-DD`); also valid for an Extra cell. A decided date counts as exact: it takes part in the order check like any written date and carries no flag unless that check objects |
-| `dateExact: true` | keeps the written (or proposed) date and removes `dateUncertain` from the session |
+| `date` | replaces the row's date (`YYYY-MM-DD`); also valid for an Extra cell. A decided date counts as exact: it takes part in the order check like any written date and carries no flag unless that check objects. Confirming a repaired or doubtful date with the same value counts as used, not stale |
+| `dateExact: true` | keeps the written (or proposed) date, removes `dateUncertain` from the session and closes the row's date items |
 | `accept: true` | closes the cell's items without changing the result |
-| `skip: true` | drops the cell or line; report entry |
+| `skip: true` | drops the cell or line; report entry. On a dated J cell it drops the Extra session (§4) |
 | `why` | free text, copied into the report |
 
 Example, with the answers of §2 that the first version of the file will contain:
@@ -259,11 +271,11 @@ Example, with the answers of §2 that the first version of the file will contain
 }
 ```
 
-A decision that changes nothing is itself a review item (`stale-decision`), so the file cannot rot unnoticed.
+A decision that changes nothing is itself a review item (`stale-decision`), so the file cannot rot unnoticed. Staleness is checked per field: every present field among `text`, `date`, `dateExact`, `accept` and `skip` that has no effect is listed, even when another field of the same decision is used.
 
 ### Report (`report.md`)
 
-Headed **FINAL** or **NOT FINAL**. Lists every repair and every dropped phrase with its cell; the decisions applied, with their `why`; unrecognised words that went into notes; counts (sessions, blocks, sets per label; review items by kind); the catalog used. It is regenerated every run.
+Headed **FINAL** or **NOT FINAL**. Lists every repair and every dropped phrase with its cell; every applied decision with the fields that took effect (and its `why`, if given); unrecognised words that went into notes; counts (sessions, blocks, sets per label; review items by kind); the catalog used. It is regenerated every run.
 
 ## 10. Testing
 
