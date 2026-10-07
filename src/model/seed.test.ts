@@ -5,7 +5,7 @@ import { SEED, mergeSeed } from './seed';
 import { slugify } from './slug';
 import { T0, exercise } from './test-fixtures';
 
-const SEED_TIME = '2026-10-06T00:00:00.000Z';
+const SEED_TIMES = ['2026-10-06T00:00:00.000Z', '2026-10-07T00:00:00.000Z'];
 
 describe('seed-exercises.json', () => {
   it('has 24 entries that all validate', () => {
@@ -19,12 +19,27 @@ describe('seed-exercises.json', () => {
     expect(new Set(SEED.map((e) => e.name.toLowerCase())).size).toBe(SEED.length);
   });
 
-  it('carries the fixed seed time, metric reps and archived false on every entry', () => {
+  it('carries a fixed seed time, metric reps and archived false on every entry', () => {
     for (const e of SEED) {
-      expect(e.updatedAt).toBe(SEED_TIME);
+      expect(SEED_TIMES, e.id).toContain(e.updatedAt);
       expect(e.metric).toBe('reps');
       expect(e.archived).toBe(false);
       expect(e.deletedAt).toBeUndefined();
+    }
+  });
+
+  it('reflects the spec 2 §6 amendment: bands and rings, no cable curls or ring dips', () => {
+    const ids = new Set(SEED.map((e) => e.id));
+    for (const id of ['australian-pull-ups-rings', 'australian-pull-ups-bar', 'face-pulls-band', 'face-pulls-cable', 'bicep-curls-band', 'bicep-curls-ez-bar', 'triceps-pulldowns-band', 'lateral-raises-band', 'ring-deficit-push-ups', 'dips-bar']) {
+      expect(ids.has(id), id).toBe(true);
+    }
+    for (const id of ['bicep-curls-cable', 'triceps-pulldowns-cable', 'lateral-raises', 'dips-rings']) expect(ids.has(id), id).toBe(false);
+    const rings = SEED.find((e) => e.id === 'australian-pull-ups-rings');
+    expect(rings?.defaultLoadType).toBe('added');
+    expect(rings?.cues).toBe('clean elbows, slow, full extension');
+    expect(rings?.updatedAt).toBe('2026-10-07T00:00:00.000Z');
+    for (const id of ['face-pulls-band', 'bicep-curls-band', 'triceps-pulldowns-band']) {
+      expect(SEED.find((e) => e.id === id)?.defaultLoadType, id).toBe('band');
     }
   });
 
