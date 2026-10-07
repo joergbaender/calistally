@@ -67,10 +67,12 @@ export function buildModel(strict: boolean) {
     aggregate: Type.Optional(Type.Literal(true)),
     note: Type.Optional(Text),
   };
-  // "Exactly one of reps / seconds" as a union of two strict shapes: a set with both fails
-  // both branches because each branch rejects the other's property.
-  const RepsSet = obj({ ...setCommon, reps: Positive });
-  const SecondsSet = obj({ ...setCommon, seconds: Positive });
+  // "Exactly one of reps / seconds": strict mode rejects the other via additionalProperties: false;
+  // lenient mode explicitly excludes it via Type.Never() to remain valid on forward-compatible reads.
+  const repsExclusion = strict ? {} : { seconds: Type.Optional(Type.Never()) };
+  const secondsExclusion = strict ? {} : { reps: Type.Optional(Type.Never()) };
+  const RepsSet = obj({ ...setCommon, reps: Positive, ...repsExclusion });
+  const SecondsSet = obj({ ...setCommon, seconds: Positive, ...secondsExclusion });
   const WorkoutSet = Type.Union([RepsSet, SecondsSet]);
 
   const Block = obj({

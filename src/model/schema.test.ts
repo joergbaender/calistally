@@ -114,6 +114,10 @@ describe('WorkoutSet schema', () => {
   it('ignores an unknown property in lenient mode', () => {
     expect(Value.Check(Lenient.WorkoutSet, { ...set(), colour: 'red' })).toBe(true);
   });
+
+  it('rejects a set with both reps and seconds in lenient mode', () => {
+    expect(Value.Check(Lenient.WorkoutSet, { ...set(), seconds: 30 })).toBe(false);
+  });
 });
 
 describe('Session schema', () => {
