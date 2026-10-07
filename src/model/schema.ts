@@ -69,10 +69,10 @@ export function buildModel(strict: boolean) {
   };
   // "Exactly one of reps / seconds": strict mode rejects the other via additionalProperties: false;
   // lenient mode explicitly excludes it via Type.Never() to remain valid on forward-compatible reads.
-  const repsExclusion = strict ? {} : { seconds: Type.Optional(Type.Never()) };
-  const secondsExclusion = strict ? {} : { reps: Type.Optional(Type.Never()) };
-  const RepsSet = obj({ ...setCommon, reps: Positive, ...repsExclusion });
-  const SecondsSet = obj({ ...setCommon, seconds: Positive, ...secondsExclusion });
+  // Typed as {} so the Static types (inferred from Strict) get no extra keys.
+  const without = (key: 'reps' | 'seconds'): {} => (strict ? {} : { [key]: Type.Optional(Type.Never()) });
+  const RepsSet = obj({ ...setCommon, reps: Positive, ...without('seconds') });
+  const SecondsSet = obj({ ...setCommon, seconds: Positive, ...without('reps') });
   const WorkoutSet = Type.Union([RepsSet, SecondsSet]);
 
   const Block = obj({

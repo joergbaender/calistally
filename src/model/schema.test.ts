@@ -1,6 +1,7 @@
 import { Value } from '@sinclair/typebox/value';
 import { describe, expect, it } from 'vitest';
 import { Lenient, MODEL_VERSION, Strict } from './schema';
+import type { WorkoutSet } from './types';
 import { T0, bodyweight, bodyweightFile, block, exercise, exercisesFile, ladder, session, sessionFile, set, timedSet } from './test-fixtures';
 
 describe('model version', () => {
@@ -117,6 +118,14 @@ describe('WorkoutSet schema', () => {
 
   it('rejects a set with both reps and seconds in lenient mode', () => {
     expect(Value.Check(Lenient.WorkoutSet, { ...set(), seconds: 30 })).toBe(false);
+  });
+
+  it('keeps the inferred set type free of lenient-only keys', () => {
+    const s: WorkoutSet = set();
+    if ('reps' in s) {
+      const n: number = s.reps;
+      expect(n).toBe(10);
+    }
   });
 });
 
