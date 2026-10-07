@@ -80,7 +80,7 @@ writeOutput(dir, result)          files, review.md, report.md         (output I/
 
 **Out-of-order and duplicate dates.** Within one column block the dates must increase strictly down the rows. For each violation the script proposes a repair only when a single edit restores the order: a month typo (`05.08` between `31.08` and `08.09` → `05.09`; `24.06` between `20.05` and `28.05`, and a duplicate of a later `24.06` → `24.05`). Where two rows are simply swapped (`06.07` above `03.07`) no proposal is made and both keep their written dates. In every case the session gets `dateUncertain: true` and a review item (`date-out-of-order`); a `dateExact: true` decision removes the flag, a `date` decision replaces the date. A duplicate date within a column block is always an item, even when the order holds.
 
-**Undated rows 3–5.** They are imported (spec 1 §6, §11 point 5). Proposal: let `d1` be the date of the first dated row of the column block and `g` the median gap in days between that block's first four dated sessions (rounded to whole days, at least 1); the k-th undated row above the first dated row gets `d1 − k·g`. With the real file every block has `g = 6`. Each such session has `dateUncertain: true` and a review item (`date-proposed`); `accept: true` keeps the proposal and the flag, `date` plus `dateExact: true` sets a confirmed date.
+**Undated rows 3–5.** They are imported (spec 1 §6, §11 point 5). Proposal: let `d1` be the date of the first dated row of the column block and `g` the median gap in days between that block's first four dated sessions (rounded to whole days, at least 1); the k-th undated row above the first dated row gets `d1 − k·g`. With the real file every block has `g = 6`. Each such session has `dateUncertain: true` and a review item (`date-proposed`); `accept: true` keeps the proposal and the flag, a `date` decision sets a confirmed date (no flag, unless the order check still objects to it).
 
 **No merging.** Two sessions on one date (a pull row and an Extra push day, say) stay two sessions with two files. Nothing is merged across rows or blocks.
 
@@ -138,7 +138,7 @@ From the exercise's `defaultLoadType`:
 | `external` | `external`, that kg | review item `load-missing`; set emitted as `external` 0 |
 | `band` | `band`, that kg | review item `load-missing`; set emitted as `band` 0 |
 
-`assist` never occurs in the sheet. `loadKg` is rounded to 2 decimals.
+An explicit `ohne` or `Bodyweight` on a set wins over this table for every exercise kind: the set is `bodyweight` 0 with no item (`20x 2 ohne weil erkältet` on the single-leg RDL means the RDL was done without the dumbbell). `assist` never occurs in the sheet. `loadKg` is rounded to 2 decimals.
 
 ### Failure
 
@@ -229,7 +229,7 @@ Sorted by column block and row. Each item: kind, cell address (and line index fo
 | `aggregate`, `note-only`, `pyramid-expanded` | spec 1 §6 reconstructions |
 | `stale-decision` | a decision for a cell that raises no item and whose `text`/`date`/`skip` changes nothing |
 
-Expected from the real file: about eight dates, two lateral-raise loads, G9, H38, M16, two aggregates, two note-only blocks, two pyramid expansions; roughly 20 items.
+Expected from the real file (confirmed by a prototype run while planning): 8 undated rows, 5 doubtful or out-of-order dates, 3 missing band loads (M33, O37 and C50 `10 down`, which the header fallback reads as curls), H38, M16, two aggregates, two note-only blocks, two pyramid expansions: 25 items. G9 raises none (13.2 reps is a legal value) and is answered by the prepared decision.
 
 ### Decisions file (`decisions.json`)
 
@@ -238,8 +238,8 @@ Lives next to the XLSX, never in git. Keys are cell addresses, optionally with a
 | Field | Effect |
 |---|---|
 | `text` | replaces the cell (or the line) before parsing |
-| `date` | replaces the row's date (`YYYY-MM-DD`); also valid for an Extra cell |
-| `dateExact: true` | removes `dateUncertain` from the session |
+| `date` | replaces the row's date (`YYYY-MM-DD`); also valid for an Extra cell. A decided date counts as exact: it takes part in the order check like any written date and carries no flag unless that check objects |
+| `dateExact: true` | keeps the written (or proposed) date and removes `dateUncertain` from the session |
 | `accept: true` | closes the cell's items without changing the result |
 | `skip: true` | drops the cell or line; report entry |
 | `why` | free text, copied into the report |
@@ -253,7 +253,8 @@ Example, with the answers of §2 that the first version of the file will contain
   "H38": { "text": "Diamonds 20x 20x 20x 20x", "why": "4x 20 = 4 sets of 20 (M8)" },
   "M33": { "text": "Lateral raises 10kg 25x 25x 24x 20x", "why": "band load not written (M6)" },
   "O37#2": { "text": "Lateral Raises 10kg 25x 25x 25x 25x", "why": "same (M6); line 2 of the cell" },
-  "A49": { "date": "2026-09-03", "dateExact": true },
+  "A49": { "date": "2026-09-05" },
+  "A34": { "dateExact": true },
   "A3":  { "accept": true }
 }
 ```
