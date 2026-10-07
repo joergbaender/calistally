@@ -62,6 +62,17 @@ describe('splitRows', () => {
     });
   });
 
+  it('turns a date-only Extra cell into an Extra session without cells', () => {
+    const only = splitRows(gridOf({ F6: { date: '2030-06-05' }, G6: 'Dips 10x', J6: '07.06.2030' }));
+    expect(only.find((r) => r.key === 'J6')).toEqual({
+      key: 'J6', block: 'Extra', row: 6, label: 'other', dateAddress: 'J6',
+      dateCell: { kind: 'text', value: '07.06.2030' },
+      cells: [],
+      noteCells: [{ address: 'J6', header: 'Extra', text: '07.06.2030' }],
+      hostKey: 'Push!6',
+    });
+  });
+
   it('ignores the header rows and empty rows', () => {
     expect(splitRows(gridOf({}))).toEqual([]);
   });

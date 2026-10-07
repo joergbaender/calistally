@@ -66,7 +66,7 @@ export function splitRows(grid: Grid): SourceRow[] {
               label: 'other',
               dateAddress: address,
               dateCell: { kind: 'text', value: lead.dateText },
-              cells: [{ address, header, text: lead.rest }],
+              cells: lead.rest.trim() === '' ? [] : [{ address, header, text: lead.rest }],
               noteCells: [{ address, header, text: cell.value }],
               hostKey: `${block.name}!${r}`,
             };
