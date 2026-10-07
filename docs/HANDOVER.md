@@ -33,6 +33,8 @@ the owner is experienced, wants his reasoning challenged, wants tradeoffs shown 
 
 ## 3. Proposed data model (draft, needs review before building)
 
+> **Superseded.** The data model and storage layout are now defined by [superpowers/specs/2026-10-06-data-model-design.md](superpowers/specs/2026-10-06-data-model-design.md) (spec 1). This section is kept for history. Where it disagrees with the spec, the spec wins.
+
 The core rule is **one record per set**. Day views, volume, PRs and charts are all *derived* from sets and never stored.
 
 ### Entities
