@@ -251,24 +251,24 @@ A soft failure **never quarantines**. The block is flagged in the UI (e.g. "unkn
 - **Every seed `id` equals `slug(name)`.** A test enforces it, so the seed and in-app creation can never produce two ids for one name.
 - **Every seed entry carries a fixed `updatedAt`** in the seed file (the day it was added to the seed), and the seed merge copies it unchanged. A seed entry is therefore always older than anything the owner did to that entry, so a fresh install that seeds while offline can't overwrite his edits or bring back an entry he deleted when the two catalogs merge.
 - On first run, and on every app start after a deploy, entries whose `id` is **missing** from the Dropbox catalog are added. Existing entries are **never** modified, even if the seed changed. A tombstoned or archived id is never re-added. A seed entry whose **name** already exists in the catalog under a different id (names compared as in §3; live, archived and tombstoned entries all count) is **skipped** and reported, so a renamed entry of the owner's never gets a second record from a later seed (§11, point 10).
-- Initial seed: derived from the XLSX. the owner confirmed the three points below the table on 2026-10-06; the rest of the table is approved together with this spec. All entries have `metric: 'reps'` and `archived: false`.
+- Initial seed: derived from the XLSX. the owner confirmed the three points below the table on 2026-10-06; the rest of the table is approved together with this spec. **Revised by spec 2 §6 on 2026-10-07** after grounding the migration in the real cells: Australian pull-ups were done on rings, face pulls, curls, triceps pulldowns and lateral raises with bands, dips only on bars. All entries have `metric: 'reps'` and `archived: false`; the four entries added on 2026-10-07 carry that day's `updatedAt`.
 
 | id | name | family | pattern | defaultLoadType | perSide |
 |---|---|---|---|---|---|
+| australian-pull-ups-rings | Australian Pull-ups (Rings) | Australian Pull-ups | pull | added | no |
 | australian-pull-ups-bar | Australian Pull-ups (Bar) | Australian Pull-ups | pull | added | no |
 | pull-ups | Pull-ups | Pull-ups | pull | bodyweight | no |
 | negative-pull-ups | Negative Pull-ups | Pull-ups | pull | bodyweight | no |
-| bicep-curls-cable | Bicep Curls (Cable) | Bicep Curls | pull | external | no |
+| bicep-curls-band | Bicep Curls (Band) | Bicep Curls | pull | band | no |
 | bicep-curls-ez-bar | Bicep Curls (EZ Bar) | Bicep Curls | pull | external | no |
+| face-pulls-band | Face Pulls (Band) | Face Pulls | pull | band | no |
 | face-pulls-cable | Face Pulls (Cable) | Face Pulls | pull | external | no |
 | dips-bar | Dips (Bar) | Dips | push | added | no |
-| dips-rings | Dips (Rings) | Dips | push | bodyweight | no |
 | push-ups | Push-ups | Push-ups | push | added | no |
 | diamond-push-ups | Diamond Push-ups | Push-ups | push | bodyweight | no |
 | ring-deficit-push-ups | Ring Deficit Push-ups | Push-ups | push | bodyweight | no |
-| triceps-pulldowns-cable | Triceps Pulldowns (Cable) | Triceps Pulldowns | push | external | no |
+| triceps-pulldowns-band | Triceps Pulldowns (Band) | Triceps Pulldowns | push | band | no |
 | overhead-press-band | Overhead Press (Band) | Overhead Press | shoulders | band | no |
-| lateral-raises | Lateral Raises | Lateral Raises | shoulders | external | no |
 | lateral-raises-band | Lateral Raises (Band) | Lateral Raises | shoulders | band | no |
 | single-leg-rdl | Single-leg RDL | Single-leg RDL | legs | external | yes |
 | single-leg-rdl-band | Single-leg RDL (Band) | Single-leg RDL | legs | band | yes |

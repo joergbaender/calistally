@@ -115,6 +115,8 @@ The core rule is **one record per set**. Day views, volume, PRs and charts are a
 
 ## 5. Migrating the XLSX
 
+> **Superseded.** The migration is specified in [superpowers/specs/2026-10-07-xlsx-migration-design.md](superpowers/specs/2026-10-07-xlsx-migration-design.md) (spec 2) and implemented under `src/migration/`. This section is kept for history; where it disagrees with spec 2, spec 2 wins.
+
 Write a one-off migration script (e.g. Node or Python) that parses the XLSX into the new JSON format and produces a **review list** of every cell it could not parse confidently. the owner confirms those entries; nothing ambiguous gets guessed silently.
 
 Sheet layout: one sheet "Calisthenics Plan", three side-by-side blocks, Pull `A–D`, Push `F–J` (J = "Extra"), Legs `L–O`. Row 2 holds the headers and data starts at row 3. 134 session rows in total (Pull 50, Push 52, Legs 32).
@@ -131,6 +133,8 @@ Known problems the script must handle or flag:
 Keep the raw XLSX in Dropbox only, out of git.
 
 ## 6. Open questions for the owner
+
+> Questions 1–3 are answered in spec 2 §2 (decisions M1–M16); 5 and 6 were answered in spec 1 (D10, D11). Question 4 (hosting) is open for spec 3.
 
 1. What exactly does `N down` mean (N, N−1, …, 1)? And the trailing extra set in the dips ladders?
 2. `13,2x` / `11,2x`: typo, or a meaning?
