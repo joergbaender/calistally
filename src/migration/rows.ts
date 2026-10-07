@@ -30,7 +30,37 @@ const LEADING_DATE = /^\s*(\d{1,2}[.,]+\d{1,2}(?:[.,]+\d{2,4})?[.,]*)(?:\s+|$)/;
 export function leadingDate(text: string): { dateText: string; rest: string } | undefined {
   const m = LEADING_DATE.exec(text);
   if (!m) return undefined;
-  return { dateText: m[1]!, rest: text.slice(m[0].length) };
+  const rest = text.slice(m[0].length);
+  // M3: `12,5 kg …` and `12.5 x 3` are a load and reps, not a date.
+  if (/^(?:kg|x)(?![a-z])/i.test(rest)) return undefined;
+  return { dateText: m[1]!, rest };
+}
+
+export interface OutsideCell {
+  address: string;
+  row: number;
+  text: string;
+}
+
+/** Spec 2 §1/§9 (F5): data cells (row ≥ FIRST_DATA_ROW) in no date, exercise or Extra column, by row then column. */
+export function outsideCells(grid: Grid): OutsideCell[] {
+  const known = new Set<string>();
+  for (const b of COLUMN_BLOCKS) {
+    known.add(b.dateCol);
+    for (const c of b.exerciseCols) known.add(c);
+    if (b.extraCol !== undefined) known.add(b.extraCol);
+  }
+  const out: (OutsideCell & { col: string })[] = [];
+  for (const [address, cell] of grid) {
+    const m = /^([A-Z]+)(\d+)$/.exec(address);
+    if (!m) continue;
+    const col = m[1]!;
+    const row = Number(m[2]);
+    if (row < FIRST_DATA_ROW || known.has(col)) continue;
+    out.push({ address, row, text: cell.value, col });
+  }
+  out.sort((a, b) => a.row - b.row || a.col.length - b.col.length || (a.col < b.col ? -1 : a.col > b.col ? 1 : 0));
+  return out.map(({ address, row, text }) => ({ address, row, text }));
 }
 
 export function headerOf(grid: Grid, col: string): string {

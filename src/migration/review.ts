@@ -6,6 +6,7 @@ const BLOCK_TITLES: Readonly<Record<string, string>> = {
   Push: 'Push (columns F–J)',
   Legs: 'Legs (columns L–O)',
   Extra: 'Extra sessions (column J)',
+  Other: 'Other cells (outside the column blocks)',
   '?': 'Decisions without a cell',
 };
 
@@ -30,6 +31,7 @@ export function decisionSkeleton(item: ReviewItem): string {
     case 'pyramid-expanded':
       return `${k}: { "accept": true }   or   ${k}: { "text": ${raw} }`;
     case 'empty-row':
+    case 'outside-blocks':
       return `${k}: { "accept": true }`;
     case 'stale-decision':
       return `remove the entry ${k} from decisions.json`;

@@ -21,6 +21,14 @@ describe('decisionSkeleton', () => {
   });
 });
 
+describe('decisionSkeleton: outside-blocks (F5)', () => {
+  it('offers accept for a cell outside the column blocks, under its own heading', () => {
+    const outside = item({ kind: 'outside-blocks', key: 'E4', block: 'Other', row: 4, date: undefined, raw: '50x Pullups', proposal: 'ignored', detail: 'column E is outside the column blocks' });
+    expect(decisionSkeleton(outside)).toBe('"E4": { "accept": true }');
+    expect(renderReview([outside])).toContain('## Other cells (outside the column blocks)');
+  });
+});
+
 describe('renderReview', () => {
   it('says so when nothing is open', () => {
     expect(renderReview([])).toContain('0 open items');

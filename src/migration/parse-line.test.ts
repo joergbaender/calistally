@@ -190,4 +190,41 @@ describe('parseLine: review triggers and failures', () => {
       expect(p.issues.map((i) => i.kind), line).toContain('unparsed-line');
     }
   });
+
+  it('F1: a leftover word with a digit in it is an unparsed line, not a note', () => {
+    for (const [line, raw] of [['20x/15x', '20x/15x'], ['20x 15x 12xx', '12xx'], ['3×5', '3×5']] as const) {
+      const p = parseLine(line);
+      expect(p.segments, line).toEqual([]);
+      expect(p.issues, line).toContainEqual({ kind: 'unparsed-line', detail: `number not understood: ${raw}` });
+    }
+    expect(kinds('Pullups 5er Pyramide')).toEqual(['pyramid-expanded']);
+    expect(show('Pullups 2x die 5er Pyramide')).toBe('1 2 3 4 5 4 3 2 1 | 1 2 3 4 5 4 3 2 1');
+    expect(parseLine('Rings Downs 15x Start with 1m Rest').restSec).toBe(60);
+    expect(show('10x 7 every 2 minutes')).toBe('10 10 10 10 10 10 10');
+  });
+
+  it('F6: an unrecognised word between two paired numbers blocks the pairing', () => {
+    const p = parseLine('10x kurz 5');
+    expect(p.segments).toEqual([]);
+    expect(p.issues.map((i) => i.kind)).toContain('unparsed-line');
+    for (const line of ['25kg x kurz 20', '12 kurz x 3', '15x kurz x2']) {
+      expect(parseLine(line).segments, line).toEqual([]);
+      expect(kinds(line), line).toContain('unparsed-line');
+    }
+    expect(show('35kg 20 x 2 ohne Griffe')).toBe('20@35 20@35');
+    expect(show('10kg SZ Hantel 17x 15,5x')).toBe('17@10 15.5@10');
+    expect(show('20x 2 ohne weil erkältet')).toBe('20@bw 20@bw');
+    expect(show('20x weil erkältet 2')).toBe('20 20');
+    expect(show('Rings Downs 15x Start with 1m Rest').split(' ')).toHaveLength(15);
+    expect(show('10x 7 every 2 minutes')).toBe('10 10 10 10 10 10 10');
+    expect(show('flacher 20x 20x')).toBe('20 20');
+  });
+
+  it('F8: a load before `Bodyweight` that no set used is an unparsed line', () => {
+    const p = parseLine('25kg Bodyweight 20x');
+    expect(p.segments).toEqual([]);
+    expect(p.issues.map((i) => i.kind)).toContain('unparsed-line');
+    expect(show('Bodyweight 20x 25x')).toBe('20@bw 25@bw');
+    expect(show('25kg 20x Bodyweight 15x')).toBe('20@25 15@bw');
+  });
 });

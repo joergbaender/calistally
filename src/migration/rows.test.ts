@@ -14,6 +14,15 @@ describe('leadingDate', () => {
     expect(leadingDate('100x Dipbar Knee Raises')).toBeUndefined();
     expect(leadingDate('20x 15x')).toBeUndefined();
   });
+
+  it('M3: a leading decimal followed by kg or x is a load or reps, not a date', () => {
+    expect(leadingDate('12,5 kg Pullups 10x')).toBeUndefined();
+    expect(leadingDate('12.5 x 3')).toBeUndefined();
+    expect(leadingDate('12.5 KG 10x')).toBeUndefined();
+    expect(leadingDate('12.5 x2')).toBeUndefined();
+    expect(leadingDate('12.05. xylophone')).toEqual({ dateText: '12.05.', rest: 'xylophone' });
+    expect(leadingDate('06.07. 100x Dipbar Knee Raises')).toEqual({ dateText: '06.07.', rest: '100x Dipbar Knee Raises' });
+  });
 });
 
 describe('splitRows', () => {

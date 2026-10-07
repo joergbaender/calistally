@@ -13,13 +13,14 @@ export type ReviewKind =
   | 'aggregate'
   | 'note-only'
   | 'pyramid-expanded'
-  | 'stale-decision';
+  | 'stale-decision'
+  | 'outside-blocks';
 
 export interface ReviewItem {
   kind: ReviewKind;
   /** The decision key that answers it: a cell address (`G9`) or address#line (`M27#3`). */
   key: string;
-  /** `Pull`, `Push`, `Legs`, `Extra`, or `?` for a decision without a cell. */
+  /** `Pull`, `Push`, `Legs`, `Extra`, `Other` for a cell outside the column blocks, or `?` for a decision without a cell. */
   block: string;
   row: number;
   date: string | undefined;

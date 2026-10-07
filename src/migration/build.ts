@@ -1,10 +1,10 @@
 import type { Block, BodyweightEntry, Exercise, LoadType, Session, WorkoutSet } from '../model/types';
 import { classifyDate, resolveBlockDates, type DateStatus, type ResolvedDate } from './dates';
-import { applyCellDecisions, type Decisions } from './decisions';
+import { applyCellDecisions, type Decision, type Decisions } from './decisions';
 import { uuidV5 } from './ids';
 import { cellLines, parseCell, type CellBlock } from './parse-cell';
 import type { ParsedSet } from './parse-line';
-import type { SourceRow } from './rows';
+import type { OutsideCell, SourceRow } from './rows';
 import { COLUMN_BLOCKS } from './sheet';
 import type { ReportEntry, ReviewItem, ReviewKind } from './types';
 
@@ -39,11 +39,23 @@ export function loadOf(set: ParsedSet, exercise: Exercise, bands: boolean): { lo
 }
 
 /** Spec 2 §4–§9: rows → sessions, catalog, bodyweight, review items and report entries. */
-export function buildSessions(rows: readonly SourceRow[], decisions: Decisions, catalog: readonly Exercise[], options: BuildOptions): BuildResult {
+export function buildSessions(
+  rows: readonly SourceRow[],
+  decisions: Decisions,
+  catalog: readonly Exercise[],
+  options: BuildOptions,
+  outside: readonly OutsideCell[] = [],
+): BuildResult {
   const byId = new Map(catalog.map((e) => [e.id, e]));
   const review: ReviewItem[] = [];
   const report: ReportEntry[] = [];
-  const usedKeys = new Set<string>();
+  /** F2: per decision key, the fields that had an effect. */
+  const usedFields = new Map<string, Set<DecisionField>>();
+  const use = (key: string, field: DecisionField): void => {
+    const set = usedFields.get(key) ?? new Set<DecisionField>();
+    set.add(field);
+    usedFields.set(key, set);
+  };
   const seenKeys = new Set<string>();
 
   const statusOf = (row: SourceRow): DateStatus => {
@@ -52,7 +64,8 @@ export function buildSessions(rows: readonly SourceRow[], decisions: Decisions, 
     if (d !== undefined) seenKeys.add(row.dateAddress);
     if (d?.date === undefined) return parsed;
     const parsedDate = 'date' in parsed ? parsed.date : undefined;
-    if (parsedDate !== d.date) usedKeys.add(row.dateAddress);
+    // F3: confirming a doubtful, repaired, unreadable or missing date is an effect too.
+    if (parsed.kind !== 'exact' || parsedDate !== d.date) use(row.dateAddress, 'date');
     return { kind: 'exact', date: d.date };
   };
 
@@ -88,7 +101,7 @@ export function buildSessions(rows: readonly SourceRow[], decisions: Decisions, 
     if (d?.dateExact && rd.uncertain) {
       rd.uncertain = false;
       rd.items = [];
-      usedKeys.add(r.dateAddress);
+      use(r.dateAddress, 'dateExact');
     }
   }
 
@@ -124,7 +137,8 @@ export function buildSessions(rows: readonly SourceRow[], decisions: Decisions, 
     const built: { cell: CellBlock; address: string; exercise: Exercise; lineCount: number }[] = [];
     for (const cell of row.cells) {
       const applied = applyCellDecisions(cell.address, cell.text, decisions);
-      for (const k of applied.used) usedKeys.add(k);
+      // applyCellDecisions uses `skip` when present (it wins over `text`), else `text`.
+      for (const k of applied.used) use(k, decisions[k]?.skip ? 'skip' : 'text');
       for (const k of applied.seen) seenKeys.add(k);
       if (applied.text === undefined) {
         report.push({ kind: 'skipped', where: cell.address, detail: `cell skipped by decision: ${JSON.stringify(cell.text)}` });
@@ -136,7 +150,19 @@ export function buildSessions(rows: readonly SourceRow[], decisions: Decisions, 
       if (parsed.cuesDropped.length > 0) report.push({ kind: 'dropped', where: cell.address, detail: `cues dropped: ${parsed.cuesDropped.join(', ')}` });
       for (const w of parsed.unrecognised) report.push({ kind: 'unrecognised', where: cell.address, detail: `"${w}" kept as note text` });
       const keyFor = (line: number): string => (lineCount > 1 ? `${cell.address}#${line}` : cell.address);
-      for (const issue of parsed.issues) {
+      // F4: a line whose blocks have no exercise is dropped below; its items must say so.
+      const droppedLines = new Set<number>();
+      for (const b of parsed.blocks) {
+        const onLine = parsed.blocks.filter((x) => x.line === b.line);
+        if (onLine.every((x) => x.exerciseId === undefined)) droppedLines.add(b.line);
+      }
+      const issues = [...parsed.issues];
+      for (const line of droppedLines) {
+        if (issues.some((i) => i.kind === 'unknown-exercise' && i.line === line)) continue;
+        const b = parsed.blocks.find((x) => x.line === line)!;
+        issues.push({ kind: 'unknown-exercise', line, rawLine: b.rawLine, detail: `no exercise for "${b.exerciseRaw}"` });
+      }
+      for (const issue of issues) {
         review.push({
           kind: issue.kind,
           key: keyFor(issue.line),
@@ -144,7 +170,9 @@ export function buildSessions(rows: readonly SourceRow[], decisions: Decisions, 
           row: row.row,
           date: rd.date,
           raw: issue.rawLine,
-          proposal: proposalFor(issue.kind, parsed.blocks.filter((b) => b.line === issue.line)),
+          proposal: droppedLines.has(issue.line)
+            ? `dropped: no exercise (${cell.header} column)`
+            : proposalFor(issue.kind, parsed.blocks.filter((b) => b.line === issue.line)),
           detail: issue.detail,
         });
       }
@@ -199,7 +227,7 @@ export function buildSessions(rows: readonly SourceRow[], decisions: Decisions, 
       };
     });
 
-    const notes = row.noteCells.map((c) => `${c.header}: ${c.text.trim()}`).join('\n');
+    const notes = row.noteCells.map((c) => `${c.header}: ${c.text.replace(/\r\n?/g, '\n').trim()}`).join('\n');
     sessions.push({
       updatedAt: options.stamp,
       id: uuidV5(sessionName),
@@ -213,6 +241,13 @@ export function buildSessions(rows: readonly SourceRow[], decisions: Decisions, 
     });
   }
 
+  // F5: cells outside the column blocks are not migrated; each one is a review item.
+  for (const c of outside) {
+    if (decisions[c.address] !== undefined) seenKeys.add(c.address);
+    const col = c.address.replace(/\d+$/, '');
+    review.push({ kind: 'outside-blocks', key: c.address, block: 'Other', row: c.row, date: undefined, raw: c.text, proposal: 'ignored', detail: `column ${col} is outside the Pull, Push and Legs column blocks` });
+  }
+
   // load-missing is raised once per block, not once per set.
   dedupe(review);
 
@@ -223,25 +258,37 @@ export function buildSessions(rows: readonly SourceRow[], decisions: Decisions, 
     const d = decisions[item.key] ?? (item.key !== address ? decisions[address] : undefined);
     const key = decisions[item.key] !== undefined ? item.key : address;
     if (d?.accept) {
-      usedKeys.add(key);
+      use(key, 'accept');
       seenKeys.add(key);
       report.push({ kind: 'accepted', where: item.key, detail: `${item.kind}: ${item.proposal}${d.why !== undefined ? ` (${d.why})` : ''}` });
     } else open.push(item);
   }
   for (const [key, d] of Object.entries(decisions)) {
     if (d.why !== undefined) report.push({ kind: 'decision', where: key, detail: d.why });
-    if (!usedKeys.has(key)) {
+    const used = usedFields.get(key);
+    // M4: every applied decision is in the report, with the fields that took effect.
+    if (used !== undefined) {
+      const applied = DECISION_FIELDS.filter((f) => used.has(f)).map((f) => describeField(f, d)).join(', ');
+      report.push({ kind: 'decision', where: key, detail: `${applied}${d.why !== undefined ? ` — ${d.why}` : ''}` });
+    }
+    const unused = DECISION_FIELDS.filter((f) => d[f] !== undefined && !(used?.has(f) ?? false));
+    if (used === undefined || unused.length > 0) {
       const address = key.split('#')[0]!;
       const row = rows.find((r) => r.dateAddress === address || r.cells.some((c) => c.address === address));
+      const otherCell = outside.find((c) => c.address === address);
+      let detail: string;
+      if (used === undefined) detail = seenKeys.has(key) ? 'the decision changes nothing' : 'no cell or item has this key';
+      else if (unused.length === 1) detail = `field "${unused[0]}" has no effect on this key`;
+      else detail = `fields ${unused.map((f) => `"${f}"`).join(', ')} have no effect on this key`;
       open.push({
         kind: 'stale-decision',
         key,
-        block: row?.block ?? '?',
-        row: row?.row ?? 0,
+        block: row?.block ?? (otherCell !== undefined ? 'Other' : '?'),
+        row: row?.row ?? otherCell?.row ?? 0,
         date: row !== undefined ? resolved.get(row.key)?.date : undefined,
         raw: JSON.stringify(d),
-        proposal: 'decision ignored',
-        detail: seenKeys.has(key) ? 'the decision changes nothing' : 'no cell or item has this key',
+        proposal: used === undefined ? 'decision ignored' : 'unused fields ignored',
+        detail,
       });
     }
   }
@@ -257,6 +304,21 @@ export function buildSessions(rows: readonly SourceRow[], decisions: Decisions, 
   }];
   open.sort(compareItems);
   return { sessions, catalog: [...catalog], bodyweight, review: open, report };
+}
+
+/** The decision fields that act on the output (`why` only explains). */
+type DecisionField = 'text' | 'date' | 'dateExact' | 'accept' | 'skip';
+const DECISION_FIELDS: readonly DecisionField[] = ['text', 'date', 'dateExact', 'accept', 'skip'];
+
+function describeField(field: DecisionField, d: Decision): string {
+  switch (field) {
+    case 'text':
+      return `text ${JSON.stringify(d.text)}`;
+    case 'date':
+      return `date ${d.date}`;
+    default:
+      return field;
+  }
 }
 
 function proposalFor(kind: ReviewKind, blocks: readonly CellBlock[]): string {
@@ -278,7 +340,7 @@ function proposalFor(kind: ReviewKind, blocks: readonly CellBlock[]): string {
   }
 }
 
-const BLOCK_ORDER: Readonly<Record<string, number>> = { Pull: 0, Push: 1, Legs: 2, Extra: 3, '?': 4 };
+const BLOCK_ORDER: Readonly<Record<string, number>> = { Pull: 0, Push: 1, Legs: 2, Extra: 3, Other: 4, '?': 5 };
 
 function compareItems(a: ReviewItem, b: ReviewItem): number {
   const ba = BLOCK_ORDER[a.block] ?? 9;

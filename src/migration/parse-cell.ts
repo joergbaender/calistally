@@ -53,6 +53,16 @@ export function parseCell(text: string, header: string): CellResult {
   const parsed = lines.map(parseLine);
   const result: CellResult = { blocks: [], tags: [], cuesDropped: [], unrecognised: [], issues: [] };
   let current: CellBlock | undefined;
+  /** F7: note lines before the first block of the cell; their text goes to the next block created. */
+  let pending: { block: CellBlock; line: number; rawLine: string; noteText: string }[] = [];
+  const addBlock = (b: CellBlock): void => {
+    if (pending.length > 0) {
+      const carried = pending.map((n) => n.noteText).join(' ');
+      setNote(b, b.note === undefined ? carried : `${carried} ${b.note}`);
+      pending = [];
+    }
+    result.blocks.push(b);
+  };
 
   parsed.forEach((p, idx) => {
     const line = idx + 1;
@@ -80,7 +90,7 @@ export function parseCell(text: string, header: string): CellResult {
 
     if (p.issues.some((i) => i.kind === 'unparsed-line')) {
       pushIssues();
-      result.blocks.push(make([], { note: rawLine }));
+      addBlock(make([], { note: rawLine }));
       current = undefined;
       return;
     }
@@ -92,7 +102,7 @@ export function parseCell(text: string, header: string): CellResult {
       // Pure note line (tags, cues, leftover words): attach to the preceding block of this cell.
       pushIssues();
       if (current !== undefined) setNote(current, appendNote(current.note, noteText));
-      else if (noteText !== undefined) result.blocks.push(make([], { note: noteText }));
+      else if (noteText !== undefined) pending.push({ block: make([], { note: noteText }), line, rawLine, noteText });
       return;
     }
 
@@ -116,7 +126,7 @@ export function parseCell(text: string, header: string): CellResult {
       current = previous;
       for (const seg of p.segments.slice(1)) {
         const b = make(seg.sets, { exerciseId: previous.exerciseId, exerciseRaw: previous.exerciseRaw });
-        result.blocks.push(b);
+        addBlock(b);
         current = b;
       }
       pushIssues();
@@ -129,7 +139,7 @@ export function parseCell(text: string, header: string): CellResult {
       if (p.restSec !== undefined) current.restSec = p.restSec;
       for (const seg of p.segments.slice(1)) {
         const b = make(seg.sets, { exerciseId: current.exerciseId, exerciseRaw: current.exerciseRaw });
-        result.blocks.push(b);
+        addBlock(b);
         current = b;
       }
       pushIssues();
@@ -139,7 +149,7 @@ export function parseCell(text: string, header: string): CellResult {
       const inherit = { exerciseId: current.exerciseId, exerciseRaw: current.exerciseRaw };
       p.segments.forEach((seg, k) => {
         const b = make(seg.sets, { ...inherit, ...(k === 0 && noteText !== undefined ? { note: noteText } : {}) });
-        result.blocks.push(b);
+        addBlock(b);
         current = b;
       });
       pushIssues();
@@ -156,11 +166,16 @@ export function parseCell(text: string, header: string): CellResult {
         b.exerciseId = resolveExercise(own?.id, header, { bands: p.bands, refinements: p.refinements });
         b.exerciseRaw = own?.raw ?? header;
       }
-      result.blocks.push(b);
+      addBlock(b);
       current = b;
     });
     if (exerciseId === undefined) result.issues.push({ kind: 'unknown-exercise', line, rawLine, detail: `no exercise for "${exerciseRaw}"` });
     pushIssues();
   });
+  // F7: the cell ended without a block for the leading note lines; keep them as 0-set blocks and flag them.
+  for (const n of pending) {
+    result.blocks.push(n.block);
+    result.issues.push({ kind: 'note-only', line: n.line, rawLine: n.rawLine, detail: n.noteText });
+  }
   return result;
 }

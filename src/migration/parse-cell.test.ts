@@ -107,6 +107,22 @@ describe('parseCell', () => {
     expect(r.issues.map((i) => i.kind)).toEqual(['note-only', 'note-only']);
   });
 
+  it('F7: a note-only first line attaches to the next block instead of inventing an empty one', () => {
+    const r = parseCell('Deeep\n20x 15x', 'Dips');
+    expect(r.blocks).toHaveLength(1);
+    expect(r.blocks[0]?.sets.map((s) => s.reps)).toEqual([20, 15]);
+    expect(r.blocks[0]?.note).toBe('Deeep');
+    expect(r.issues).toEqual([]);
+    expect(parseCell('Deeep\n10kg 20x 16,5x flacher', 'Dips').blocks[0]?.note).toBe('Deeep flacher');
+  });
+
+  it('F7: a cell with only note lines keeps its 0-set block and flags it note-only', () => {
+    const r = parseCell('Deeep', 'Dips');
+    expect(r.blocks).toHaveLength(1);
+    expect(r.blocks[0]).toMatchObject({ sets: [], note: 'Deeep', line: 1, exerciseId: 'dips-bar' });
+    expect(r.issues).toEqual([{ kind: 'note-only', line: 1, rawLine: 'Deeep', detail: 'Deeep' }]);
+  });
+
   it('aggregates, pyramids and parenthesised numbers pass their issues through with the line', () => {
     expect(parseCell('100 Diamonds', 'Push Ups').blocks[0]).toMatchObject({ aggregate: true, exerciseId: 'diamond-push-ups' });
     expect(parseCell('Pullups 2x die 5er Pyramide', 'Extra').blocks).toHaveLength(2);

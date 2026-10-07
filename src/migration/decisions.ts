@@ -18,7 +18,8 @@ const FIELDS = new Set(['text', 'date', 'dateExact', 'accept', 'skip', 'why']);
 
 /** Parse and check the decisions file. Throws with the offending key on any shape error. */
 export function parseDecisions(json: string): Decisions {
-  const raw: unknown = JSON.parse(json);
+  // M2: an editor may save the file with a UTF-8 byte order mark.
+  const raw: unknown = JSON.parse(json.startsWith('﻿') ? json.slice(1) : json);
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) throw new Error('decisions file must hold a JSON object');
   const out: Record<string, Decision> = {};
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {

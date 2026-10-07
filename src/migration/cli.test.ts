@@ -86,6 +86,21 @@ describe('runMigration', () => {
     expect(lines.at(-1)).toContain('FINAL');
   });
 
+  it('F5: lists a cell outside the column blocks in review.md', async () => {
+    const own = await mkdtemp(path.join(os.tmpdir(), 'calistally-cli-outside-'));
+    try {
+      const book = path.join(own, 'synthetic.xlsx');
+      const dec = path.join(own, 'decisions.json');
+      await writeWorkbook(book, { A6: { date: '2030-02-01' }, B6: '6kg 15x', E6: '50x Pullups' });
+      await writeFile(dec, '{}');
+      const code = await runMigration({ xlsx: book, decisions: dec, out: path.join(own, 'out'), repoRoot, log: quiet });
+      expect(code).toBe(EXIT.open);
+      expect(await readFile(path.join(own, 'out', 'review.md'), 'utf8')).toContain('### E6 · outside-blocks');
+    } finally {
+      await rm(own, { recursive: true, force: true });
+    }
+  });
+
   it('rejects a malformed decisions file', async () => {
     await writeFile(decisions, '{"g9": {}}');
     await expect(runMigration({ xlsx, decisions, out, repoRoot, log: quiet })).rejects.toThrow(/cell address/);

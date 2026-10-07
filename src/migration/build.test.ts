@@ -5,7 +5,7 @@ import { checkCatalogRules, validateForWrite } from '../model/validate';
 import { buildSessions, loadOf } from './build';
 import type { Decisions } from './decisions';
 import { uuidV5 } from './ids';
-import { splitRows } from './rows';
+import { outsideCells, splitRows } from './rows';
 import { gridOf, type CellSpec } from './test-fixtures';
 
 const STAMP = '2030-10-07T00:00:00.000Z';
@@ -196,6 +196,72 @@ describe('buildSessions: decisions', () => {
     const r = build(lines, { 'C6#2': { text: 'Lateral raises 10kg 30x 30x' } });
     expect(r.review).toEqual([]);
     expect(r.sessions[0]?.blocks[1]?.sets[0]).toMatchObject({ loadType: 'band', loadKg: 10 });
+  });
+});
+
+describe('buildSessions: final-review fixes', () => {
+  it('F2: a partly used decision reports its unused fields as stale', () => {
+    const r = build({ A4: d('2030-03-08'), B4: '20x' }, { B4: { text: '12x', date: '2030-03-09' } });
+    expect(r.sessions[0]?.blocks[0]?.sets.map(repsOf)).toEqual([12]);
+    expect(r.review.map((i) => [i.kind, i.key, i.detail])).toEqual([['stale-decision', 'B4', 'field "date" has no effect on this key']]);
+    const two = build({ A4: d('2030-03-08'), B4: '20x' }, { B4: { text: '12x', date: '2030-03-09', dateExact: true } });
+    expect(two.review.map((i) => [i.kind, i.key, i.detail])).toEqual([['stale-decision', 'B4', 'fields "date", "dateExact" have no effect on this key']]);
+    expect(build({ A4: d('2030-03-08'), B4: '20x' }, { B4: { text: '12x', why: 'typo' } }).review).toEqual([]);
+  });
+
+  it('F3: a date decision on a doubtful date is used, even when it confirms the date', () => {
+    const r = build({ A4: '28.04.203', B4: '20x' }, { A4: { date: '2030-04-28' } });
+    expect(r.review).toEqual([]);
+    expect(r.sessions[0]?.date).toBe('2030-04-28');
+    expect(r.sessions[0]?.dateUncertain).toBeUndefined();
+  });
+
+  it('F4: an Extra line without exercise says it is dropped', () => {
+    const r = build({ F3: d('2030-03-01'), G3: 'Dips 10x', J3: '10x 3 4' });
+    expect(r.sessions[0]?.blocks.map((b) => b.exerciseId)).toEqual(['dips-bar']);
+    const j3 = r.review.filter((i) => i.key === 'J3');
+    expect(j3.map((i) => i.kind)).toContain('unknown-exercise');
+    expect(j3.find((i) => i.kind === 'unknown-exercise')?.proposal.startsWith('dropped')).toBe(true);
+    expect(j3.every((i) => i.proposal.startsWith('dropped'))).toBe(true);
+    expect(r.review.some((i) => i.proposal.includes('emitted'))).toBe(false);
+    const note = build({ F3: d('2030-03-01'), G3: 'Dips 10x', J3: 'Deeep' });
+    expect(note.review.map((i) => [i.kind, i.key])).toEqual([['note-only', 'J3'], ['unknown-exercise', 'J3']]);
+    expect(note.review.every((i) => i.proposal === 'dropped: no exercise (Extra column)')).toBe(true);
+  });
+
+  it('F5: a cell outside the column blocks becomes an outside-blocks item that accept closes', () => {
+    const withOutside = (c: Record<string, CellSpec>, decisions: Decisions = {}) => {
+      const grid = gridOf(c);
+      return buildSessions(splitRows(grid), decisions, SEED, OPTIONS, outsideCells(grid));
+    };
+    const cells = { A4: d('2030-03-08'), B4: '20x', E4: '50x Pullups' };
+    const r = withOutside(cells);
+    expect(r.review.map((i) => [i.kind, i.key, i.proposal])).toEqual([['outside-blocks', 'E4', 'ignored']]);
+    expect(r.review[0]).toMatchObject({ raw: '50x Pullups', row: 4 });
+    const closed = withOutside(cells, { E4: { accept: true } });
+    expect(closed.review).toEqual([]);
+    expect(closed.report.some((e) => e.kind === 'accepted' && e.where === 'E4')).toBe(true);
+    expect(withOutside({ A4: d('2030-03-08'), B4: '20x', K1: 'title', P2: 'header' }).review).toEqual([]);
+    expect(outsideCells(gridOf({ A4: d('2030-03-08'), E4: 'x', K9: 'y', AA3: 'z', J5: 'w', E2: 'h' }))).toEqual([
+      { address: 'AA3', row: 3, text: 'z' },
+      { address: 'E4', row: 4, text: 'x' },
+      { address: 'K9', row: 9, text: 'y' },
+    ]);
+  });
+
+  it('M1: session notes use \\n even when a cell has CRLF line breaks', () => {
+    const r = build({ A6: d('2030-02-01'), B6: '6kg 15x\r\n12x' });
+    expect(r.sessions[0]?.notes).toBe('Australian Pull Ups: 6kg 15x\n12x');
+  });
+
+  it('M4: every applied decision gets a decision report entry, with why when present', () => {
+    const r = build({ A4: '28.04.203', B4: '20x', A5: d('2030-05-01'), B5: '20x 15x\n9x' }, {
+      A4: { date: '2030-04-29' }, B4: { text: '12x', why: 'typo' }, 'B5#2': { skip: true },
+    });
+    expect(r.report).toContainEqual({ kind: 'decision', where: 'A4', detail: 'date 2030-04-29' });
+    expect(r.report).toContainEqual({ kind: 'decision', where: 'B4', detail: 'typo' });
+    expect(r.report).toContainEqual({ kind: 'decision', where: 'B4', detail: 'text "12x" — typo' });
+    expect(r.report).toContainEqual({ kind: 'decision', where: 'B5#2', detail: 'skip' });
   });
 });
 

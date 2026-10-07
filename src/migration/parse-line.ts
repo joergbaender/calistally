@@ -89,6 +89,10 @@ export function parseLine(input: string): ParsedLine {
   // Phrase pass: words are consumed by phrases, aliases, flags and keywords; everything numeric
   // and every grammar keyword goes to `rest` for the set grammar.
   const rest: Token[] = [];
+  /** Original token index of each `rest` token, and of each unrecognised word (F6: no pairing across one). */
+  const restAt: number[] = [];
+  const unrecognisedAt: number[] = [];
+  const digitWords: string[] = [];
   let aliasRestIndex: number | undefined;
   let pyramid: { blocks: number; top: number } | undefined;
   for (let i = 0; i < tokens.length; ) {
@@ -101,6 +105,7 @@ export function parseLine(input: string): ParsedLine {
     }
     if (t.type !== 'word') {
       rest.push(t);
+      restAt.push(i);
       i += 1;
       continue;
     }
@@ -168,19 +173,28 @@ export function parseLine(input: string): ParsedLine {
     }
     if (GRAMMAR_KEYWORDS.has(t.text)) {
       rest.push(t);
+      restAt.push(i);
       i += 1;
       continue;
     }
     out.noteWords.push(t.raw);
     out.unrecognised.push(t.raw);
+    unrecognisedAt.push(i);
+    if (/\d/.test(t.raw)) digitWords.push(t.raw);
     i += 1;
   }
   if (out.aliases[0] !== undefined) out.alias = out.aliases[0];
+  if (digitWords.length > 0) {
+    // F1: `20x/15x`, `12xx`, `3×5` hold numbers the grammar cannot read; never keep them as a silent note.
+    out.issues.push({ kind: 'unparsed-line', detail: `number not understood: ${digitWords.join(', ')}` });
+    return out;
+  }
 
   const first = rest[0];
   if (first?.type === 'word' && (first.text === 'dann' || first.text === 'plus')) {
     out.join = first.text;
     rest.shift();
+    restAt.shift();
     if (aliasRestIndex !== undefined && aliasRestIndex > 0) aliasRestIndex -= 1;
   }
   const numeric = rest.filter(isNumeric);
@@ -226,7 +240,12 @@ export function parseLine(input: string): ParsedLine {
     return out;
   }
   try {
-    const { segments, issues } = runGrammar(rest);
+    const blocked = (from: number, to: number): boolean => {
+      const a = restAt[from];
+      const b = restAt[to];
+      return a !== undefined && b !== undefined && unrecognisedAt.some((u) => u > a && u < b);
+    };
+    const { segments, issues } = runGrammar(rest, blocked);
     out.segments = segments;
     out.issues.push(...issues);
   } catch (e) {
@@ -238,8 +257,12 @@ export function parseLine(input: string): ParsedLine {
 }
 
 /** The set-building rules of spec 2 §5, left to right. */
-function runGrammar(rest: readonly Token[]): { segments: LineSegment[]; issues: LineIssue[] } {
+function runGrammar(rest: readonly Token[], blocked: (from: number, to: number) => boolean = () => false): { segments: LineSegment[]; issues: LineIssue[] } {
   const issues: LineIssue[] = [];
+  /** F6: `10x kurz 5` must not pair across the unrecognised word. */
+  const pair = (from: number, to: number): void => {
+    if (blocked(from, to)) throw new GrammarError(`a note word between ${rest.slice(from, to + 1).map((t) => t.raw).join(' ')}`);
+  };
   const segments: LineSegment[] = [{ sets: [] }];
   let sets = segments[0]!.sets;
   let load: number | undefined;
@@ -271,6 +294,7 @@ function runGrammar(rest: readonly Token[]): { segments: LineSegment[]; issues: 
         loadUnused = true;
         bodyweightMode = false;
         if (n1?.type === 'x' && n2?.type === 'num') {
+          pair(i, n3?.type === 'xsets' ? i + 3 : i + 2);
           const count = n3?.type === 'xsets' ? n3.sets : 1;
           push(n2.value, count);
           i += n3?.type === 'xsets' ? 4 : 3;
@@ -278,9 +302,11 @@ function runGrammar(rest: readonly Token[]): { segments: LineSegment[]; issues: 
         break;
       case 'reps':
         if (n1?.type === 'num') {
+          pair(i, i + 1);
           push(t.reps, n1.value);
           i += 2;
         } else if (n1?.type === 'xsets') {
+          pair(i, i + 1);
           push(t.reps, n1.sets);
           i += 2;
         } else {
@@ -294,6 +320,7 @@ function runGrammar(rest: readonly Token[]): { segments: LineSegment[]; issues: 
         break;
       case 'num':
         if (n1?.type === 'x' && n2?.type === 'num') {
+          pair(i, i + 2);
           push(t.value, n2.value);
           i += 3;
         } else if (n1?.type === 'word' && n1.text === 'down') {
@@ -320,6 +347,8 @@ function runGrammar(rest: readonly Token[]): { segments: LineSegment[]; issues: 
             i += 1;
             break;
           case 'bodyweight':
+            // F8: `25kg Bodyweight 20x` would lose the 25 kg.
+            if (loadUnused) throw new GrammarError('a load with no sets');
             bodyweightMode = true;
             load = undefined;
             i += 1;

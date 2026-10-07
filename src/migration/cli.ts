@@ -6,7 +6,7 @@ import { parseDecisions } from './decisions';
 import { readWorkbook } from './grid';
 import { isInside, toFiles, validateAll, writeOutput } from './output';
 import { renderReport, renderReview } from './review';
-import { splitRows } from './rows';
+import { outsideCells, splitRows } from './rows';
 import { MIGRATION_STAMP, SHEET_YEAR } from './sheet';
 
 export interface MigrationArgs {
@@ -30,7 +30,7 @@ export async function runMigration(args: MigrationArgs): Promise<number> {
   }
   const grid = await readWorkbook(args.xlsx);
   const decisions = parseDecisions(await readFile(args.decisions, 'utf8'));
-  const result = buildSessions(splitRows(grid), decisions, SEED, { year: SHEET_YEAR, stamp: MIGRATION_STAMP, bodyweightKg: args.bodyweightKg });
+  const result = buildSessions(splitRows(grid), decisions, SEED, { year: SHEET_YEAR, stamp: MIGRATION_STAMP, bodyweightKg: args.bodyweightKg }, outsideCells(grid));
   const issues = validateAll(result);
   if (issues.length > 0) {
     log('validation failed, nothing written (this is a bug in the migration, not a review item):');

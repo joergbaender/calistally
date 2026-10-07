@@ -15,6 +15,10 @@ describe('parseDecisions', () => {
     expect(parseDecisions('{}')).toEqual({});
   });
 
+  it('M2: strips a leading UTF-8 byte order mark', () => {
+    expect(parseDecisions('﻿{"A3": {"accept": true}}')).toEqual({ A3: { accept: true } });
+  });
+
   it.each([
     ['[]', /JSON object/],
     ['{"g9": {}}', /cell address/],
