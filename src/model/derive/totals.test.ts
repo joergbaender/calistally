@@ -54,6 +54,12 @@ describe('blockLoad (spec §7)', () => {
     const tie = block([set({ order: 0, loadType: 'band', loadKg: 50 }), set({ order: 1, loadType: 'external', loadKg: 35 })]);
     expect(blockLoad(tie)).toEqual({ group: 'band', kg: 50 });
   });
+
+  it('ignores a deleted set that has the highest kg (spec §9)', () => {
+    const b = block(ladder([10, 10], { loadType: 'added', loadKg: 20 }));
+    b.sets[1] = { ...b.sets[1]!, loadKg: 50, deletedAt: T0 };
+    expect(blockLoad(b)).toEqual({ group: 'body', kg: 20 });
+  });
 });
 
 describe('exerciseSessionTotal (spec §7)', () => {
@@ -66,9 +72,25 @@ describe('exerciseSessionTotal (spec §7)', () => {
     expect(exerciseSessionTotal(s, 'pull-ups')).toEqual({ amount: 41, unknown: false });
   });
 
-  it('is unknown for a migrated note-only block, but not for an empty app block', () => {
+  it('is unknown for a migrated note-only block (empty and has note), but not for an empty app block or empty migrated without note', () => {
     const migrated = session([block([], { note: 'Pyramide' })], { source: 'migrated' });
     expect(exerciseSessionTotal(migrated, 'pull-ups').unknown).toBe(true);
     expect(exerciseSessionTotal(session([block()]), 'pull-ups').unknown).toBe(false);
+    const migratedNoNote = session([block([])], { source: 'migrated' });
+    expect(exerciseSessionTotal(migratedNoNote, 'pull-ups').unknown).toBe(false);
+  });
+
+  it('ignores a deleted block of the exercise (spec §9)', () => {
+    const b = block(ladder([10, 20]), { order: 0, deletedAt: T0 });
+    const s = session([
+      b,
+      block(ladder([5, 5]), { order: 1 }),
+    ]);
+    expect(exerciseSessionTotal(s, 'pull-ups')).toEqual({ amount: 10, unknown: false });
+  });
+
+  it('returns 0 amount and false unknown for a tombstoned session (spec §9)', () => {
+    const s = session([block(ladder([100]))], { deletedAt: T0 });
+    expect(exerciseSessionTotal(s, 'pull-ups')).toEqual({ amount: 0, unknown: false });
   });
 });

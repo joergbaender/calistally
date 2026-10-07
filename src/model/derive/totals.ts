@@ -15,6 +15,7 @@ export function metricOf(set: WorkoutSet): 'reps' | 'seconds' {
 }
 
 export interface BlockTotals {
+  /** 'reps' or 'seconds'; meaningless when isEmpty (defaults to 'reps'). */
   metric: 'reps' | 'seconds';
   /** totalReps or totalSeconds; for perSide exercises in per-side units as logged, never doubled. */
   amount: number;
@@ -77,12 +78,12 @@ export function blockLoad(block: Block): BlockLoad | undefined {
 
 export interface ExerciseTotal {
   amount: number;
-  /** true when a migrated note-only block makes the real number unknown. */
+  /** true when a migrated note-only block (a note and no live sets) makes the real number unknown. */
   unknown: boolean;
 }
 
 export function exerciseSessionTotal(session: Session, exerciseId: string): ExerciseTotal {
   const blocks = liveBlocks(session).filter((b) => b.exerciseId === exerciseId);
-  const unknown = session.source === 'migrated' && blocks.some((b) => liveSets(b).length === 0);
+  const unknown = session.source === 'migrated' && blocks.some((b) => b.note !== undefined && liveSets(b).length === 0);
   return { amount: round2(blocks.reduce((sum, b) => sum + blockTotals(b).amount, 0)), unknown };
 }
