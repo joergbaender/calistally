@@ -74,6 +74,10 @@ describe('validateFile: hard rules', () => {
     expect(hardPaths('session', sessionFile(session([block([s])])))).toEqual(['/session/blocks/0/sets/0/loadKg']);
   });
 
+  it('accepts an empty block in an app session', () => {
+    expect(validateFile('session', sessionFile(session([block([])], { source: 'app' }))).ok).toBe(true);
+  });
+
   it('accepts external and band with 0 kg', () => {
     const b = block([set({ loadType: 'external', loadKg: 0, order: 0 }), set({ loadType: 'band', loadKg: 0, order: 1 })]);
     expect(validateFile('session', sessionFile(session([b]))).ok).toBe(true);
@@ -114,16 +118,22 @@ describe('validateFile: hard rules', () => {
 });
 
 describe('validateForWrite', () => {
-  it('validates the JSON form, so explicit undefined keys are fine and Infinity is not', () => {
+  it('accepts explicit undefined keys and rejects Infinity', () => {
     const fine = sessionFile(session([block([{ ...set(), note: undefined } as never])]));
     expect(validateForWrite('session', fine).ok).toBe(true);
     const bad = sessionFile(session([block([set({ order: Number.POSITIVE_INFINITY })])]));
     expect(validateForWrite('session', bad).ok).toBe(false);
   });
 
-  it('rejects NaN, which the JSON form turns into null', () => {
+  it('rejects NaN', () => {
     const bad = sessionFile(session([block([set({ loadType: 'external', loadKg: Number.NaN })])]));
     expect(validateForWrite('session', bad).ok).toBe(false);
+  });
+
+  it('judges the JSON form: a Date serialises to the ISO string the file will hold', () => {
+    const file = sessionFile(session([block([{ ...set(), completedAt: new Date(T0) } as never])]));
+    expect(validateFile('session', file).ok).toBe(false);
+    expect(validateForWrite('session', file).ok).toBe(true);
   });
 });
 
@@ -140,6 +150,7 @@ describe('checkCatalogRules (soft)', () => {
     const issues = checkCatalogRules(s, catalog);
     expect(issues.every((i) => i.level === 'soft')).toBe(true);
     expect(paths(issues)).toEqual(['/session/blocks/0/exerciseId', '/session/blocks/1/sets/0/reps']);
+    expect(validateFile('session', sessionFile(s)).ok).toBe(true); // a soft failure never quarantines
   });
 
   it('ignores deleted blocks and deleted sets', () => {
