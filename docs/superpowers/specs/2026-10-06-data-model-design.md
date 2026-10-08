@@ -10,7 +10,7 @@ This spec replaces HANDOVER.md §3 (draft data model) and the storage part of §
 
 ## 1. Purpose and usage model
 
-CalisTally replaces a free-text XLSX. The central use case is **live logging during a workout**. the owner starts a block, does a set, enters its rep count, rests (often around 1 min), does the next set, enters it, and so on. The app is his notepad and shows where he is in the current ladder and what he did last time.
+CalisTally replaces a free-text XLSX. The central use case is **live logging during a workout**. The owner starts a block, does a set, enters its rep count, rests (often around 1 min), does the next set, enters it, and so on. The app is his notepad and shows where he is in the current ladder and what he did last time.
 
 Examples of real patterns:
 - Down-ladder with a combined tail: `17 16 15 … 5`, then `10` (the 4+3+2+1 done as one set). Next month the tail may be `11`.
@@ -68,7 +68,7 @@ These rules are part of the data model because the merge in spec 3 is built on t
 - **What `updatedAt` covers.** It covers the record's own fields, i.e. everything except its child array (`blocks` on a session, `sets` on a block). Adding, changing or deleting a child never changes the parent's `updatedAt`. Otherwise a set logged on one device would overwrite a session note edited earlier on another.
 - **Setting `updatedAt`.** On every change: `updatedAt = max(now, previous updatedAt + 1 ms)`. An edit made after a merge therefore always wins, even on a device whose clock runs slow.
 - **Merge unit (for spec 3).** Each record is merged on its own: the copy with the newer `updatedAt` supplies all of the record's own fields, including `deletedAt`. Child arrays are merged by `id`, recursively. If both copies have the same `updatedAt`, a tombstone wins; spec 3 defines a deterministic tie-break for the rest.
-- **Clock skew** between devices is accepted. the owner is the only user and his devices sync their clocks; the damage a skewed clock can do is limited to one record's own fields.
+- **Clock skew** between devices is accepted. The owner is the only user and his devices sync their clocks; the damage a skewed clock can do is limited to one record's own fields.
 - **Delete.** Deleting sets `deletedAt` and `updatedAt` to the same instant. A tombstone **keeps the full record**, so it stays schema-valid, can be undeleted, and (for exercises) can still be resolved by old references.
 - **Undelete.** Removing `deletedAt` and setting `updatedAt` restores a record. It wins by the ordinary newer-`updatedAt` rule.
 - **No cascade.** Deleting a parent marks only the parent. Its children are left as they are, and every reader treats everything under a tombstoned parent as deleted. Undeleting the parent brings the children back unchanged.
@@ -251,7 +251,7 @@ A soft failure **never quarantines**. The block is flagged in the UI (e.g. "unkn
 - **Every seed `id` equals `slug(name)`.** A test enforces it, so the seed and in-app creation can never produce two ids for one name.
 - **Every seed entry carries a fixed `updatedAt`** in the seed file (the day it was added to the seed), and the seed merge copies it unchanged. A seed entry is therefore always older than anything the owner did to that entry, so a fresh install that seeds while offline can't overwrite his edits or bring back an entry he deleted when the two catalogs merge.
 - On first run, and on every app start after a deploy, entries whose `id` is **missing** from the Dropbox catalog are added. Existing entries are **never** modified, even if the seed changed. A tombstoned or archived id is never re-added. A seed entry whose **name** already exists in the catalog under a different id (names compared as in §3; live, archived and tombstoned entries all count) is **skipped** and reported, so a renamed entry of the owner's never gets a second record from a later seed (§11, point 10).
-- Initial seed: derived from the XLSX. the owner confirmed the three points below the table on 2026-10-06; the rest of the table is approved together with this spec. **Revised by spec 2 §6 on 2026-10-07** after grounding the migration in the real cells: Australian pull-ups were done on rings, face pulls, curls, triceps pulldowns and lateral raises with bands, dips only on bars. All entries have `metric: 'reps'` and `archived: false`; the four entries added on 2026-10-07 carry that day's `updatedAt`.
+- Initial seed: derived from the XLSX. The owner confirmed the three points below the table on 2026-10-06; the rest of the table is approved together with this spec. **Revised by spec 2 §6 on 2026-10-07** after grounding the migration in the real cells: Australian pull-ups were done on rings, face pulls, curls, triceps pulldowns and lateral raises with bands, dips only on bars. All entries have `metric: 'reps'` and `archived: false`; the four entries added on 2026-10-07 carry that day's `updatedAt`.
 
 | id | name | family | pattern | defaultLoadType | perSide |
 |---|---|---|---|---|---|
@@ -316,7 +316,7 @@ All functions ignore tombstoned records and everything under a tombstoned parent
 
 **Indicators in an open session are provisional**, because the block isn't finished. Spec 4 decides whether to show them before the session closes.
 
-**Two blocks open at once.** The model allows a session where the owner alternates two exercises set by set: each exercise is one block, and the sets carry their own `completedAt`. The set interval within a block then spans the other exercise's set, which is the true interval between two sets of that exercise. the owner doesn't train this way today, so the v1 live log has one open block at a time; the rule stays here so that adding it later needs no model change.
+**Two blocks open at once.** The model allows a session where the owner alternates two exercises set by set: each exercise is one block, and the sets carry their own `completedAt`. The set interval within a block then spans the other exercise's set, which is the true interval between two sets of that exercise. The owner doesn't train this way today, so the v1 live log has one open block at a time; the rule stays here so that adding it later needs no model change.
 
 The v1.1 overload layer (trends, best set, "+X since last month", effective load = estimate) will be added as further pure functions over this same data. No new stored fields are expected, with the limit noted under D2.
 
@@ -354,7 +354,7 @@ The library choices (schema library, validator) are made in the implementation p
 - **Spec 4+, UI:** live log (sticky load, last-time reference, create an exercise inline, entering sets and sessions after the fact), day list with filter chips and ↑↓, per-exercise history, calendar/consistency, bodyweight log, catalog screen, issues screen for quarantined files, soft validation failures, held-back writes and duplicate session files.
 - **v1.1:** overload calculations.
 
-## 11. the owner's answers to the review's open points (2026-10-06)
+## 11. The owner's answers to the review's open points (2026-10-06)
 
 The spec review left nine points where the choice was the owner's. His answers are below, and the sections named are written accordingly.
 
