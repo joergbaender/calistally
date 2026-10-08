@@ -13,6 +13,8 @@ export interface MigrationArgs {
   xlsx: string;
   decisions: string;
   out: string;
+  /** The single bodyweight entry's kg (spec 2 §8); a positive number from `--bodyweight`. */
+  bodyweightKg: number;
   repoRoot: string;
   log?: (line: string) => void;
 }

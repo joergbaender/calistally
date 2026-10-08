@@ -48,7 +48,7 @@ describe('renderReview', () => {
 });
 
 describe('renderReport', () => {
-  const result = buildSessions(splitRows(gridOf({ B3: '20x', A6: { date: '2030-02-01' }, B6: '6kg 15x', C6: '35kg 16x', F6: '01,02.2030', G6: 'Dips 10x' })), {}, SEED, { year: 2030, stamp: '2030-10-07T00:00:00.000Z', bodyweightKg: 73 });
+  const result = buildSessions(splitRows(gridOf({ B3: '20x', A6: { date: '2030-02-01' }, B6: '6kg 15x', C6: '35kg 16x', F6: '01,02.2030', G6: 'Dips 10x' })), {}, SEED, { year: 2030, stamp: '2030-10-07T00:00:00.000Z', bodyweightKg: 80 });
 
   it('heads the report FINAL or NOT FINAL and counts everything', () => {
     const md = renderReport(result, { final: false, xlsx: 'synthetic.xlsx', decisionCount: 0 });

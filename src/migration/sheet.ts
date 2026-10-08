@@ -27,5 +27,9 @@ export const SHEET_YEAR = 2026;
 /** Every migrated record's updatedAt (spec 2 §8). Older than anything the owner will do in the app. */
 export const MIGRATION_STAMP = '2026-10-07T00:00:00.000Z';
 
-/** Spec 2 §8 "Bodyweight" (decision M15). */
-export const BODYWEIGHT_KG = 73;
+/** Spec 2 §8 "Bodyweight" (decision M15): the value comes from `--bodyweight` (spec 3 §10), never from the repo. */
+export function parseBodyweight(value: string | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  const kg = Number(value.replace(',', '.'));
+  return Number.isFinite(kg) && kg > 0 ? kg : undefined;
+}

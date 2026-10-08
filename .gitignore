@@ -7,6 +7,7 @@ dist-ssr/
 build/
 coverage/
 *.local
+dev-dist/
 
 # Logs
 logs/
