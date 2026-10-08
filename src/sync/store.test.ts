@@ -120,3 +120,48 @@ describe('Store.finishQueueRow', () => {
     expect(await store.getRow(p1)).toMatchObject({ rev: 'r2', syncedAt: '2030-02-03T10:01:00.000Z' });
   });
 });
+
+describe('Store.writeFile with an expected version', () => {
+  it('writes when the row is still at the expected version (0 for an absent row)', async () => {
+    const { store } = await makeStore();
+    expect(await store.writeFile('session', p1, sessionFile(s1), new Date(), 0)).toEqual({ ok: true });
+    expect(await store.writeFile('session', p1, sessionFile({ ...s1, notes: 'x' }), new Date(), 1)).toEqual({ ok: true });
+    expect((await store.getRow(p1))?.version).toBe(2);
+  });
+
+  it('refuses with changed and writes nothing when the row moved since the read', async () => {
+    const { store, changes } = await makeStore();
+    await store.writeFile('session', p1, sessionFile(s1), new Date('2030-02-03T10:00:00.000Z'));
+    await store.writeFile('session', p1, sessionFile({ ...s1, notes: 'newer' }), new Date('2030-02-03T10:01:00.000Z'));
+    changes.length = 0;
+    expect(await store.writeFile('session', p1, sessionFile({ ...s1, notes: 'stale' }), new Date(), 1)).toEqual({ ok: false, reason: 'changed' });
+    expect(await store.writeFile('session', p1, sessionFile({ ...s1, notes: 'stale' }), new Date(), 0)).toEqual({ ok: false, reason: 'changed' });
+    expect((await store.getRow(p1))?.version).toBe(2);
+    expect(((await store.getRow(p1))?.content as { session: { notes?: string } }).session.notes).toBe('newer');
+    expect(changes).toEqual([]);
+  });
+});
+
+describe('Store.mutate', () => {
+  it('stores, deletes or leaves each record by its field, in one transaction', async () => {
+    const { store, changes } = await makeStore();
+    await store.writeFile('session', p1, sessionFile(s1), new Date('2030-02-03T10:00:00.000Z'));
+    changes.length = 0;
+    await store.mutate(p1, (row, queued) => ({ queue: { ...(queued as NonNullable<typeof queued>), attempts: 4 }, ...(row === undefined ? { row: null } : {}) }));
+    expect((await store.getQueueRow(p1))?.attempts).toBe(4);
+    expect(await store.getRow(p1)).toBeDefined();
+    expect(changes).toEqual([]);
+    await store.mutate(p1, () => ({ row: null, queue: null }));
+    expect(await store.getRow(p1)).toBeUndefined();
+    expect(await store.getQueueRow(p1)).toBeUndefined();
+    expect(changes).toEqual([p1]);
+  });
+
+  it('sees a write that was issued before it, even when not awaited', async () => {
+    const { store } = await makeStore();
+    void store.writeFile('session', p1, sessionFile(s1), new Date('2030-02-03T10:00:00.000Z'));
+    let seen: number | undefined;
+    await store.mutate(p1, (row) => { seen = row?.version; return {}; });
+    expect(seen).toBe(1);
+  });
+});
