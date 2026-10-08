@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { AuthError } from './auth';
 import { DropboxHttpClient, contentHash, headerSafeJson, type TokenSource } from './dropbox-client';
 
 interface Call { url: string; headers: Record<string, string>; body: unknown; signal: AbortSignal | null | undefined }
@@ -108,13 +109,37 @@ describe('DropboxHttpClient errors', () => {
     expect(calls[1]?.headers['Authorization']).toBe('Bearer tok2');
   });
 
-  it('is unauthorized when the retry fails again or the refresh throws', async () => {
+  it('is unauthorized when the retry fails again or the refresh is rejected', async () => {
     const a = harness([json(401, {}), json(401, {})]);
     expect(await a.client.getLatestCursor()).toMatchObject({ ok: false, error: 'unauthorized' });
-    const b = harness([json(401, {})], { refresh: async () => { throw new Error('revoked'); } });
+    const b = harness([json(401, {})], { refresh: async () => { throw new AuthError('unauthorized', 'revoked'); } });
     expect(await b.client.getLatestCursor()).toMatchObject({ ok: false, error: 'unauthorized', message: 'revoked' });
-    const c = harness([], { accessToken: async () => { throw new Error('not connected'); } });
+    const c = harness([], { accessToken: async () => { throw new AuthError('unauthorized', 'not connected'); } });
     expect(await c.client.getLatestCursor()).toMatchObject({ ok: false, error: 'unauthorized' });
+  });
+
+  it('is offline when the token refresh fails on the network or with an unknown error', async () => {
+    const a = harness([json(401, {})], { refresh: async () => { throw new AuthError('network', 'fetch failed'); } });
+    expect(await a.client.getLatestCursor()).toMatchObject({ ok: false, error: 'offline', message: 'fetch failed' });
+    const b = harness([], { accessToken: async () => { throw new AuthError('network', 'token endpoint returned 503'); } });
+    expect(await b.client.getLatestCursor()).toMatchObject({ ok: false, error: 'offline' });
+    const c = harness([], { accessToken: async () => { throw new SyntaxError('bad JSON'); } });
+    expect(await c.client.getLatestCursor()).toMatchObject({ ok: false, error: 'offline' });
+  });
+
+  it('goes through on the next call once a refresh that failed offline succeeds (no permanent stop)', async () => {
+    let calls = 0;
+    const { client, calls: requests } = harness([json(200, { cursor: 'c' })], {
+      accessToken: async () => {
+        calls += 1;
+        if (calls === 1) throw new AuthError('network', 'fetch failed');
+        return 'fresh';
+      },
+    });
+    expect(await client.getLatestCursor()).toMatchObject({ ok: false, error: 'offline' });
+    expect(requests).toHaveLength(0);
+    expect(await client.getLatestCursor()).toEqual({ ok: true, value: 'c' });
+    expect(requests[0]?.headers['Authorization']).toBe('Bearer fresh');
   });
 
   it('maps 429 to rate-limited with Retry-After from the header, the body, or 1 s', async () => {
