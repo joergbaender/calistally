@@ -29,10 +29,10 @@
 Input classes spec 2 implies but that no task's tests originally exercised. Each is pinned to a test in the owning task.
 
 1. A `text` decision whose replacement itself contains `dann` or several lines must go through the full grammar and produce two blocks, not one. → Task 11, test "a text decision is parsed like a cell".
-2. An Excel date cell is a `Date` at UTC midnight; the calendar day must come from the UTC fields, never from local time (the owner's PC is UTC+1/+2, so local fields would be right by accident and wrong on another machine). → Task 1, test "takes the calendar day from the UTC fields".
+2. An Excel date cell is a `Date` at UTC midnight; the calendar day must come from the UTC fields, never from local time (The owner's PC is UTC+1/+2, so local fields would be right by accident and wrong on another machine). → Task 1, test "takes the calendar day from the UTC fields".
 3. Two sessions on the same date (a column-block row and an Extra session) must get two distinct file paths via `<id8>`, never overwrite each other. → Task 12, test "two sessions on one date get two files".
 4. A `text` decision identical to the cell changes nothing and must surface as `stale-decision`, otherwise the decisions file silently rots. → Task 11, test "a decision that changes nothing is stale".
-5. `writeOutput` must remove only the managed paths and leave anything else in `--out` alone (the owner may keep notes next to the output), and `--out` inside the repository must be refused before anything is read. → Task 12, test "clears only the managed paths"; Task 13, test "refuses an output directory inside the repository".
+5. `writeOutput` must remove only the managed paths and leave anything else in `--out` alone (The owner may keep notes next to the output), and `--out` inside the repository must be refused before anything is read. → Task 12, test "clears only the managed paths"; Task 13, test "refuses an output directory inside the repository".
 
 ## File Structure
 
@@ -165,7 +165,7 @@ export const SHEET_YEAR = 2026;
 export const MIGRATION_STAMP = '2026-10-07T00:00:00.000Z';
 
 /** Spec 2 §8 "Bodyweight" (decision M15). */
-export const BODYWEIGHT_KG = 73;
+export const BODYWEIGHT_KG = 80;
 ```
 
 - [ ] **Step 5: Write the failing tests `src/migration/grid.test.ts`**
@@ -549,10 +549,10 @@ Expected: PASS. The existing `mergeSeed` tests still hold (`pull-ups` and `dips-
 
 - [ ] **Step 5: Update spec 1 §5 "Seed catalog"**
 
-In `docs/superpowers/specs/2026-10-06-data-model-design.md`, replace the sentence `- Initial seed: derived from the XLSX. the owner confirmed the three points below the table on 2026-10-06; the rest of the table is approved together with this spec. All entries have `metric: 'reps'` and `archived: false`.` with:
+In `docs/superpowers/specs/2026-10-06-data-model-design.md`, replace the sentence `- Initial seed: derived from the XLSX. The owner confirmed the three points below the table on 2026-10-06; the rest of the table is approved together with this spec. All entries have `metric: 'reps'` and `archived: false`.` with:
 
 ```markdown
-- Initial seed: derived from the XLSX. the owner confirmed the three points below the table on 2026-10-06; the rest of the table is approved together with this spec. **Revised by spec 2 §6 on 2026-10-07** after grounding the migration in the real cells: Australian pull-ups were done on rings, face pulls, curls, triceps pulldowns and lateral raises with bands, dips only on bars. All entries have `metric: 'reps'` and `archived: false`; the four entries added on 2026-10-07 carry that day's `updatedAt`.
+- Initial seed: derived from the XLSX. The owner confirmed the three points below the table on 2026-10-06; the rest of the table is approved together with this spec. **Revised by spec 2 §6 on 2026-10-07** after grounding the migration in the real cells: Australian pull-ups were done on rings, face pulls, curls, triceps pulldowns and lateral raises with bands, dips only on bars. All entries have `metric: 'reps'` and `archived: false`; the four entries added on 2026-10-07 carry that day's `updatedAt`.
 ```
 
 Then replace the table rows so the table reads:
@@ -3810,7 +3810,7 @@ git commit -m "Document the migration in CLAUDE.md and mark HANDOVER sections as
 
 - [ ] **Step 4: Push and open the pull request**
 
-the owner merges PRs himself and cleans up branches; never merge locally.
+The owner merges PRs himself and cleans up branches; never merge locally.
 
 ```powershell
 git push -u origin spec/xlsx-migration

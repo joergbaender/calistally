@@ -18,7 +18,7 @@ Replace the free-text XLSX with a tracker that:
 - shows **each training day in detail** (exactly what was done, set by set, for progressive overload);
 - has a **dashboard** with visuals (progress per exercise, volume, PRs, consistency, split balance, bodyweight).
 
-**The data model comes first.** the owner agreed that the real problem with the XLSX is the lack of structure, not the spreadsheet UI.
+**The data model comes first.** The owner agreed that the real problem with the XLSX is the lack of structure, not the spreadsheet UI.
 
 ## 2. Decisions (made by the owner, 06.10.2026)
 
@@ -29,7 +29,7 @@ Replace the free-text XLSX with a tracker that:
 | 3 | Pyramids / ladders | **Log every set in detail.** Patterns must be fully custom, not just symmetric pyramids, e.g. `1 2 3 5 6 5 4 2 5`. |
 | 4 | Effort (RPE / RIR) | **None.** Too detailed for the owner's needs. |
 
-the owner is experienced, wants his reasoning challenged, wants tradeoffs shown with evidence so he can decide, and does not want "good enough".
+The owner is experienced, wants his reasoning challenged, wants tradeoffs shown with evidence so he can decide, and does not want "good enough".
 
 ## 3. Proposed data model (draft, needs review before building)
 
@@ -117,7 +117,7 @@ The core rule is **one record per set**. Day views, volume, PRs and charts are a
 
 > **Superseded.** The migration is specified in [superpowers/specs/2026-10-07-xlsx-migration-design.md](superpowers/specs/2026-10-07-xlsx-migration-design.md) (spec 2) and implemented under `src/migration/`. This section is kept for history; where it disagrees with spec 2, spec 2 wins.
 
-Write a one-off migration script (e.g. Node or Python) that parses the XLSX into the new JSON format and produces a **review list** of every cell it could not parse confidently. the owner confirms those entries; nothing ambiguous gets guessed silently.
+Write a one-off migration script (e.g. Node or Python) that parses the XLSX into the new JSON format and produces a **review list** of every cell it could not parse confidently. The owner confirms those entries; nothing ambiguous gets guessed silently.
 
 Sheet layout: one sheet "Calisthenics Plan", three side-by-side blocks, Pull `A–D`, Push `F–J` (J = "Extra"), Legs `L–O`. Row 2 holds the headers and data starts at row 3. 134 session rows in total (Pull 50, Push 52, Legs 32).
 

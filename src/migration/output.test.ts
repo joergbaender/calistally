@@ -8,7 +8,7 @@ import { isInside, sessionFilePath, toFiles, validateAll, writeOutput } from './
 import { splitRows } from './rows';
 import { gridOf } from './test-fixtures';
 
-const OPTIONS = { year: 2030, stamp: '2030-10-07T00:00:00.000Z', bodyweightKg: 73 };
+const OPTIONS = { year: 2030, stamp: '2030-10-07T00:00:00.000Z', bodyweightKg: 80 };
 const result = (): BuildResult =>
   buildSessions(splitRows(gridOf({ A6: { date: '2030-06-05' }, B6: '6kg 15x', F6: { date: '2030-06-05' }, G6: 'Dips 10x', J6: '07.06.2030 Pullups 5x' })), {}, SEED, OPTIONS);
 
