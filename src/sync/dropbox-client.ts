@@ -1,3 +1,5 @@
+import { AuthError } from './auth';
+
 /** The seven Dropbox calls the engine needs, over fetch (spec 3 §4). */
 
 export interface Listing {
@@ -187,14 +189,14 @@ export class DropboxHttpClient implements DropboxClient {
     try {
       token = await this.deps.tokens.accessToken();
     } catch (e) {
-      return { ok: false, error: 'unauthorized', message: e instanceof Error ? e.message : 'not connected' };
+      return tokenFailure(e, 'not connected');
     }
     let res = await this.fetchOnce(url, init, token, timeoutMs);
     if (res instanceof Response && res.status === 401) {
       try {
         token = await this.deps.tokens.refresh();
       } catch (e) {
-        return { ok: false, error: 'unauthorized', message: e instanceof Error ? e.message : 'refresh failed' };
+        return tokenFailure(e, 'refresh failed');
       }
       res = await this.fetchOnce(url, init, token, timeoutMs);
     }
@@ -238,6 +240,14 @@ export class DropboxHttpClient implements DropboxClient {
       return { message: e instanceof Error ? e.message : 'network error' };
     }
   }
+}
+
+/** A throw from the token source: a rejected token means unauthorized (the login is gone); a
+ *  network failure or anything unexpected means offline, so the engine backs off and retries. */
+function tokenFailure(e: unknown, fallback: string): Raw {
+  const message = e instanceof Error ? e.message : fallback;
+  if (e instanceof AuthError && e.code !== 'network') return { ok: false, error: 'unauthorized', message };
+  return { ok: false, error: 'offline', message };
 }
 
 /** Maps the `.tag` chain of a 409 body to a DropboxError. */
