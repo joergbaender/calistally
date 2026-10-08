@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { EXIT, runMigration } from './cli';
+import { parseBodyweight } from './sheet';
 import { writeWorkbook } from './test-fixtures';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -50,13 +51,13 @@ describe('runMigration', () => {
 
   it('refuses an output directory inside the repository before reading anything', async () => {
     const inside = path.join(repoRoot, 'migration-out', 'cli-test-must-not-exist');
-    const code = await runMigration({ xlsx: path.join(dir, 'does-not-exist.xlsx'), decisions, out: inside, repoRoot, log: quiet });
+    const code = await runMigration({ xlsx: path.join(dir, 'does-not-exist.xlsx'), decisions, out: inside, bodyweightKg: 80, repoRoot, log: quiet });
     expect(code).toBe(EXIT.usage);
     await expect(access(inside)).rejects.toThrow();
   });
 
   it('writes every file, reports NOT FINAL while items are open, and leaves other files alone', async () => {
-    const code = await runMigration({ xlsx, decisions, out, repoRoot, log: quiet });
+    const code = await runMigration({ xlsx, decisions, out, bodyweightKg: 80, repoRoot, log: quiet });
     expect(code).toBe(EXIT.open);
     const files = await snapshot(out);
     expect(files.get('notes.txt')).toBe('keep me');
@@ -71,14 +72,14 @@ describe('runMigration', () => {
 
   it('is byte-identical on a rerun', async () => {
     const before = await snapshot(out);
-    await runMigration({ xlsx, decisions, out, repoRoot, log: quiet });
+    await runMigration({ xlsx, decisions, out, bodyweightKg: 80, repoRoot, log: quiet });
     expect(await snapshot(out)).toEqual(before);
   });
 
   it('exits 0 and reports FINAL once every item is answered', async () => {
     await writeFile(decisions, JSON.stringify({ A3: { accept: true }, H6: { accept: true }, J7: { accept: true } }));
     const lines: string[] = [];
-    const code = await runMigration({ xlsx, decisions, out, repoRoot, log: (l) => lines.push(l) });
+    const code = await runMigration({ xlsx, decisions, out, bodyweightKg: 80, repoRoot, log: (l) => lines.push(l) });
     expect(code).toBe(EXIT.final);
     const files = await snapshot(out);
     expect(files.get('report.md')?.startsWith('# Migration report — FINAL')).toBe(true);
@@ -93,7 +94,7 @@ describe('runMigration', () => {
       const dec = path.join(own, 'decisions.json');
       await writeWorkbook(book, { A6: { date: '2030-02-01' }, B6: '6kg 15x', E6: '50x Pullups' });
       await writeFile(dec, '{}');
-      const code = await runMigration({ xlsx: book, decisions: dec, out: path.join(own, 'out'), repoRoot, log: quiet });
+      const code = await runMigration({ xlsx: book, decisions: dec, out: path.join(own, 'out'), bodyweightKg: 80, repoRoot, log: quiet });
       expect(code).toBe(EXIT.open);
       expect(await readFile(path.join(own, 'out', 'review.md'), 'utf8')).toContain('### E6 · outside-blocks');
     } finally {
@@ -114,7 +115,7 @@ describe('runMigration', () => {
       await mkdir(path.dirname(appFile), { recursive: true });
       await writeFile(appFile, appContent);
       const lines: string[] = [];
-      const code = await runMigration({ xlsx: book, decisions: dec, out: target, repoRoot, log: (l) => lines.push(l) });
+      const code = await runMigration({ xlsx: book, decisions: dec, out: target, bodyweightKg: 80, repoRoot, log: (l) => lines.push(l) });
       expect(code).toBe(EXIT.usage);
       expect(lines.join('\n')).toContain('sessions/2030/x.json');
       expect(await snapshot(target)).toEqual(new Map([['sessions/2030/x.json', appContent]]));
@@ -133,7 +134,7 @@ describe('runMigration', () => {
       const target = path.join(own, 'out');
       await mkdir(path.join(target, 'sessions'), { recursive: true });
       await writeFile(path.join(target, 'sessions', 'notes.txt'), 'mine');
-      const code = await runMigration({ xlsx: book, decisions: dec, out: target, repoRoot, log: quiet });
+      const code = await runMigration({ xlsx: book, decisions: dec, out: target, bodyweightKg: 80, repoRoot, log: quiet });
       expect(code).toBe(EXIT.usage);
       expect(await snapshot(target)).toEqual(new Map([['sessions/notes.txt', 'mine']]));
     } finally {
@@ -143,6 +144,18 @@ describe('runMigration', () => {
 
   it('rejects a malformed decisions file', async () => {
     await writeFile(decisions, '{"g9": {}}');
-    await expect(runMigration({ xlsx, decisions, out, repoRoot, log: quiet })).rejects.toThrow(/cell address/);
+    await expect(runMigration({ xlsx, decisions, out, bodyweightKg: 80, repoRoot, log: quiet })).rejects.toThrow(/cell address/);
+  });
+});
+
+describe('parseBodyweight', () => {
+  it('accepts a positive number with a decimal point or comma', () => {
+    expect(parseBodyweight('80')).toBe(80);
+    expect(parseBodyweight('80,5')).toBe(80.5);
+    expect(parseBodyweight('80.5')).toBe(80.5);
+  });
+
+  it('rejects a missing, zero, negative or non-numeric value', () => {
+    for (const v of [undefined, '0', '-5', 'abc', '']) expect(parseBodyweight(v)).toBeUndefined();
   });
 });
