@@ -297,13 +297,16 @@ export class Engine {
    *  local changes are released (spec 3 §6). */
   private async rereadNonOk(): Promise<void> {
     for (const row of await this.store.rows()) {
-      if (row.status === 'ok' || row.rev === null || typeof row.content !== 'object' || row.content === null) continue;
+      if (row.rev === null || typeof row.content !== 'object' || row.content === null) continue;
+      // An ok row is read again only while parked local changes wait on it (their upgrade failed).
+      if (row.status === 'ok' && (await this.store.getQueueRow(row.path))?.pendingContent === undefined) continue;
       await this.applyRaw(row.path, row.kind, row.rev, row.content);
     }
     const rows = await this.store.rows();
     this.status.tooNewSeen = rows.some((r) => r.status === 'read-only' || r.status === 'needs-update');
   }
 
+  /** Read, merge and write happen in one transaction (Store.mutate): a set typed meanwhile survives. */
   private async applyRaw(path: string, kind: FileKind, rev: string, raw: unknown): Promise<void> {
     const result = this.read(kind, raw);
     if (result.status !== 'ok') {
@@ -311,33 +314,35 @@ export class Engine {
       await this.saveNonOk(path, kind, rev, raw, result.status, result.issues);
       return;
     }
-    const row = await this.store.getRow(path);
-    const queued = await this.store.getQueueRow(path);
-    let merged: unknown = result.file;
-    let localVersion = row?.version ?? 0;
-    const localOk = row !== undefined && row.status === 'ok' && row.duplicateOf === undefined;
-    if (localOk) merged = this.mergeInto(kind, row.content, merged);
-    if (queued?.pendingContent !== undefined) {
-      const up = this.upgrade(kind, queued.pendingContent);
-      if (up.status === 'ok') merged = this.mergeInto(kind, up.file, merged);
-    }
-    const equalsRemote = sameContent(merged, result.file);
-    const equalsLocal = localOk && sameContent(merged, row.content);
-    if (!equalsLocal) localVersion += 1;
     const at = this.now().toISOString();
-    const next: FileRow = {
-      path, kind, rev, content: merged, status: 'ok', issues: [], version: localVersion,
-      ...(equalsRemote ? { syncedAt: at } : row?.syncedAt !== undefined ? { syncedAt: row.syncedAt } : {}),
-    };
-    await this.store.saveRow(next);
-    if (equalsRemote) {
-      if (queued !== undefined) await this.store.deleteQueueRow(path);
-    } else {
+    await this.store.mutate(path, (row, queued) => {
+      let merged: unknown = result.file;
+      let localVersion = row?.version ?? 0;
+      const localOk = row !== undefined && row.status === 'ok' && row.duplicateOf === undefined;
+      if (localOk) merged = this.mergeInto(kind, row.content, merged);
+      let upgradeError: string | undefined;
+      if (queued?.pendingContent !== undefined) {
+        const up = this.upgrade(kind, queued.pendingContent);
+        if (up.status === 'ok') merged = this.mergeInto(kind, up.file, merged);
+        else upgradeError = up.status === 'invalid' ? up.message : `newer than this app (version ${up.version})`;
+      }
+      const equalsRemote = sameContent(merged, result.file);
+      const equalsLocal = localOk && sameContent(merged, row.content);
+      if (!equalsLocal) localVersion += 1;
+      const next: FileRow = {
+        path, kind, rev, content: merged, status: 'ok', issues: [], version: localVersion,
+        ...(equalsRemote ? { syncedAt: at } : row?.syncedAt !== undefined ? { syncedAt: row.syncedAt } : {}),
+      };
+      if (upgradeError !== undefined && queued !== undefined) {
+        // Parked local changes that cannot be upgraded are kept as they are, never dropped.
+        return { row: next, queue: { ...queued, lastError: `parked local changes could not be upgraded: ${upgradeError}` } };
+      }
+      if (equalsRemote) return { row: next, queue: null };
       const base: QueueRow = queued ?? { path, kind, enqueuedAt: at, attempts: 0 };
       const { pendingContent: _p, pendingVersion: _v, lastError: _e, heldBack: _h, ...kept } = base;
       const validation = validateForWrite(kind, merged);
-      await this.store.setQueueRow({ ...kept, ...(validation.ok ? {} : { heldBack: validation.issues }) });
-    }
+      return { row: next, queue: { ...kept, ...(validation.ok ? {} : { heldBack: validation.issues }) } };
+    });
   }
 
   private mergeInto(kind: FileKind, local: unknown, remote: unknown): unknown {
@@ -347,22 +352,24 @@ export class Engine {
 
   /** A too-new or invalid remote replaces the row; queued local content is parked, never lost. */
   private async saveNonOk(path: string, kind: FileKind, rev: string, raw: unknown, status: 'read-only' | 'needs-update' | 'quarantined', issues: FileRow['issues']): Promise<void> {
-    const row = await this.store.getRow(path);
-    const queued = await this.store.getQueueRow(path);
-    if (queued !== undefined && row !== undefined && row.status === 'ok' && queued.pendingContent === undefined) {
-      const { heldBack: _h, ...kept } = queued;
-      await this.store.setQueueRow({ ...kept, pendingContent: row.content, pendingVersion: this.modelVersion, lastError: status === 'quarantined' ? 'Dropbox copy invalid; local changes wait' : 'Dropbox copy is newer than this app; local changes wait' });
-    } else if (queued !== undefined && status === 'quarantined') {
-      await this.store.setQueueRow({ ...queued, lastError: 'Dropbox copy invalid; local changes wait' });
-    }
-    await this.store.saveRow({ path, kind, rev, content: raw, status, issues, version: row?.version ?? 0 });
+    await this.store.mutate(path, (row, queued) => {
+      let queue: QueueRow | undefined;
+      if (queued !== undefined && row !== undefined && row.status === 'ok' && queued.pendingContent === undefined) {
+        const { heldBack: _h, ...kept } = queued;
+        queue = { ...kept, pendingContent: row.content, pendingVersion: this.modelVersion, lastError: status === 'quarantined' ? 'Dropbox copy invalid; local changes wait' : 'Dropbox copy is newer than this app; local changes wait' };
+      } else if (queued !== undefined && status === 'quarantined') {
+        queue = { ...queued, lastError: 'Dropbox copy invalid; local changes wait' };
+      }
+      return { row: { path, kind, rev, content: raw, status, issues, version: row?.version ?? 0 }, ...(queue !== undefined ? { queue } : {}) };
+    });
   }
 
   private async remoteDeleted(path: string): Promise<void> {
-    const row = await this.store.getRow(path);
-    if (row === undefined) return;
-    if (row.duplicateOf !== undefined) { await this.store.deleteRow(path); return; }
-    await this.store.saveRow({ ...row, rev: null, remoteDeleted: true });
+    await this.store.mutate(path, (row) => {
+      if (row === undefined) return {};
+      if (row.duplicateOf !== undefined) return { row: null };
+      return { row: { ...row, rev: null, remoteDeleted: true } };
+    });
   }
 
   private async afterPull(): Promise<void> {
@@ -389,21 +396,26 @@ export class Engine {
       const winner = rows[0] as FileRow;
       let merged: unknown = winner.content;
       for (const loser of rows.slice(1)) merged = this.mergeInto('session', merged, loser.content);
-      if (!sameContent(merged, winner.content)) await this.store.writeFile('session', winner.path, merged, this.now());
+      if (!sameContent(merged, winner.content)) {
+        const written = await this.store.writeFile('session', winner.path, merged, this.now(), winner.version);
+        if (!written.ok) continue; // the winner moved since it was read; the next pull retries
+      }
       for (const loser of rows.slice(1)) {
-        await this.store.saveRow({ ...loser, duplicateOf: winner.path });
-        await this.store.deleteQueueRow(loser.path);
+        // A loser edited since it was read keeps its changes; the next pull retries.
+        await this.store.mutate(loser.path, (row) => (row === undefined || row.version !== loser.version ? {} : { row: { ...row, duplicateOf: winner.path }, queue: null }));
       }
     }
   }
 
   private async heal(): Promise<void> {
-    const catalog = await this.store.catalog();
-    if (catalog === undefined) return;
+    const row = await this.store.getRow(EXERCISES_PATH);
+    if (row === undefined || row.status !== 'ok') return;
+    const catalog = row.content as ExercisesFile;
     const sessions = (await this.store.sessions()).map((s) => s.file.session);
     const healed = restoreReferenced(catalog.exercises, sessions, this.now());
     if (healed.some((e, i) => e !== catalog.exercises[i])) {
-      await this.store.writeFile('exercises', EXERCISES_PATH, { ...catalog, exercises: healed } satisfies ExercisesFile, this.now());
+      // Skipped when the catalog changed since the read; the next pull heals again.
+      await this.store.writeFile('exercises', EXERCISES_PATH, { ...catalog, exercises: healed } satisfies ExercisesFile, this.now(), row.version);
     }
   }
 
@@ -418,7 +430,8 @@ export class Engine {
     const existing = row === undefined ? [] : (row.content as ExercisesFile).exercises;
     const result = mergeSeed(existing, this.seed);
     if (result.added.length > 0 || row === undefined) {
-      await this.store.writeFile('exercises', EXERCISES_PATH, { schemaVersion: this.modelVersion, exercises: result.catalog }, this.now());
+      const written = await this.store.writeFile('exercises', EXERCISES_PATH, { schemaVersion: this.modelVersion, exercises: result.catalog }, this.now(), row?.version ?? 0);
+      if (!written.ok) return; // the catalog changed since the read: not seeded, the next pull retries
     }
     await this.store.setMeta('seededBuild', this.deps.buildId);
   }
@@ -446,6 +459,7 @@ export class Engine {
     const row = await this.store.getRow(queued.path);
     if (row === undefined) { await this.store.deleteQueueRow(queued.path); return 'done'; }
     if (row.status !== 'ok' || row.duplicateOf !== undefined) return 'done';
+    if (queued.pendingContent !== undefined) return 'done'; // parked local changes wait for their upgrade
     const validation = validateForWrite(row.kind, row.content);
     if (!validation.ok) {
       if (queued.heldBack === undefined) await this.store.setQueueRow({ ...queued, heldBack: validation.issues });
@@ -470,13 +484,15 @@ export class Engine {
       if (r.error === 'conflict') {
         const n = (conflicts.get(row.path) ?? 0) + 1;
         conflicts.set(row.path, n);
-        await this.store.setQueueRow({ ...queued, attempts: queued.attempts + 1 });
+        await this.store.mutate(row.path, (_r, q) => (q === undefined ? {} : { queue: { ...q, attempts: q.attempts + 1 } }));
         const remote = await this.client.download(row.path);
         if (remote.ok) await this.applyRemote(row.path, row.kind, remote.value.rev, remote.value.text);
         else if (remote.error === 'missing') await this.remoteDeleted(row.path);
         else return this.failed(remote);
         if (n >= CONFLICTS_PER_DRAIN) {
-          this.status.lastError = `${row.path}: ${n} conflicts in one run; will retry`;
+          const message = `${row.path}: ${n} conflicts in one run; will retry`;
+          await this.store.mutate(row.path, (_r, q) => (q === undefined ? {} : { queue: { ...q, lastError: message } }));
+          this.status.lastError = message;
           return 'stopped';
         }
         const again = await this.store.getQueueRow(row.path);

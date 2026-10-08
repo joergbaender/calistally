@@ -36,7 +36,7 @@ export interface QueueRow {
   pendingVersion?: number;
 }
 
-export type WriteRefusal = 'read-only' | 'needs-update' | 'quarantined' | 'duplicate';
+export type WriteRefusal = 'read-only' | 'needs-update' | 'quarantined' | 'duplicate' | 'changed';
 export type WriteResult = { ok: true; heldBack?: ValidationIssue[] } | { ok: false; reason: WriteRefusal };
 
 export type IssueReason =
@@ -60,9 +60,11 @@ export class Store {
   constructor(readonly db: Db, private readonly events: StoreEvents = {}) {}
 
   /** The write every screen calls. One transaction over files and queue. */
-  async writeFile(kind: FileKind, path: string, file: unknown, now: Date = new Date()): Promise<WriteResult> {
+  async writeFile(kind: FileKind, path: string, file: unknown, now: Date = new Date(), expectedVersion?: number): Promise<WriteResult> {
     const result = await this.db.tx(['files', 'queue'], 'readwrite', async (t): Promise<WriteResult> => {
       const row = await t.get<FileRow>('files', path);
+      // The caller derived `file` from an earlier read; if the row moved since, write nothing.
+      if (expectedVersion !== undefined && (row?.version ?? 0) !== expectedVersion) return { ok: false, reason: 'changed' };
       if (row !== undefined) {
         if (row.duplicateOf !== undefined) return { ok: false, reason: 'duplicate' };
         if (row.status !== 'ok') return { ok: false, reason: row.status };
@@ -150,6 +152,27 @@ export class Store {
   async saveRow(row: FileRow): Promise<void> {
     await this.db.put('files', row);
     this.events.onChange?.(row.path);
+  }
+
+  /** Reads the row and its queue row and writes the outcome in ONE transaction, so a merge sees
+   *  one consistent state and a concurrent writeFile cannot be overwritten. `fn` must be
+   *  synchronous. For each field of its result: an object is stored, null deletes, absent leaves
+   *  the record alone. */
+  async mutate(
+    path: string,
+    fn: (row: FileRow | undefined, queued: QueueRow | undefined) => { row?: FileRow | null; queue?: QueueRow | null },
+  ): Promise<void> {
+    const rowChanged = await this.db.tx(['files', 'queue'], 'readwrite', async (t) => {
+      const row = await t.get<FileRow>('files', path);
+      const queued = await t.get<QueueRow>('queue', path);
+      const out = fn(row, queued);
+      if (out.row === null) await t.delete('files', path);
+      else if (out.row !== undefined) await t.put('files', out.row);
+      if (out.queue === null) await t.delete('queue', path);
+      else if (out.queue !== undefined) await t.put('queue', out.queue);
+      return out.row !== undefined;
+    });
+    if (rowChanged) this.events.onChange?.(path);
   }
 
   /** Engine-side update of a row inside a caller's transaction. */

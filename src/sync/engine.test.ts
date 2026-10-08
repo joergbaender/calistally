@@ -122,6 +122,48 @@ describe('Engine push', () => {
     expect(n).toBe(3);
     expect(engine.status.lastError).toMatch(/3 conflicts/);
     expect(await store.queue()).toHaveLength(1);
+    expect((await store.queue())[0]).toMatchObject({ attempts: 3, lastError: expect.stringMatching(/3 conflicts/) });
+  });
+
+  it('keeps keystrokes that land while a pulled file is being downloaded and applied', async () => {
+    const dropbox = new FakeDropbox();
+    let storeRef: Store | undefined;
+    let typed = false;
+    const s = sessionAt(40);
+    const path = sessionPath(s.session.date, s.session.id);
+    const typing: DropboxClient = {
+      ...dropbox,
+      listFolder: () => dropbox.listFolder(),
+      listFolderContinue: (c) => dropbox.listFolderContinue(c),
+      getLatestCursor: () => dropbox.getLatestCursor(),
+      downloadZip: (p) => dropbox.downloadZip(p),
+      revokeToken: () => dropbox.revokeToken(),
+      upload: (p, t, m) => dropbox.upload(p, t, m),
+      download: async (p) => {
+        if (typed && p === path) {
+          typed = false;
+          const mine = set({ id: sid(41), order: 3, reps: 2, updatedAt: '2030-06-01T10:20:00.000Z' });
+          const row = await storeRef?.getRow(path);
+          const file = row?.content as SessionFile;
+          const b = file.session.blocks[0] as SessionFile['session']['blocks'][number];
+          await storeRef?.writeFile('session', p, { ...file, session: { ...file.session, blocks: [{ ...b, sets: [...b.sets, mine] }] } });
+        }
+        return dropbox.download(p);
+      },
+    };
+    dropbox.put(path, json(s));
+    const h = await harness({ client: typing }, dropbox);
+    storeRef = h.store;
+    await h.engine.drain();
+    const theirs = set({ id: sid(42), order: 2, reps: 3, updatedAt: '2030-06-01T10:10:00.000Z' });
+    const b0 = s.session.blocks[0] as SessionFile['session']['blocks'][number];
+    dropbox.put(path, json({ ...s, session: { ...s.session, blocks: [{ ...b0, sets: [...b0.sets, theirs] }] } }));
+    typed = true;
+    await h.engine.drain();
+    const ids = (r: unknown) => ((r as SessionFile).session.blocks[0]?.sets ?? []).map((x) => x.id);
+    expect(ids((await h.store.getRow(path))?.content)).toEqual(expect.arrayContaining([sid(41), sid(42)]));
+    expect(ids(JSON.parse(dropbox.get(path)?.text as string))).toEqual(expect.arrayContaining([sid(41), sid(42)]));
+    expect(await h.store.queue()).toEqual([]);
   });
 
   it('keeps the queue row when a write lands during the upload (version race)', async () => {
@@ -289,6 +331,32 @@ describe('Engine pull', () => {
     expect(stored.session.blocks[0]?.sets.map((x) => x.id)).toContain(sid(99));
     expect(await h.store.queue()).toEqual([]);
     expect((await h.store.getRow(path))?.status).toBe('ok');
+  });
+
+  it('keeps parked local changes, with an error, when their upgrade fails', async () => {
+    const dropbox = new FakeDropbox();
+    const s = sessionAt(43);
+    const path = sessionPath(s.session.date, s.session.id);
+    dropbox.put(path, json(s));
+    const h = await harness({}, dropbox);
+    await h.engine.drain();
+    const mine = { ...s, session: { ...s.session, notes: 'phone', updatedAt: '2030-06-01T10:05:00.000Z' } };
+    await h.store.writeFile('session', path, mine);
+    dropbox.put(path, json({ ...s, schemaVersion: 2, extra: true }));
+    await h.engine.drain();
+    expect((await h.store.getQueueRow(path))?.pendingContent).toEqual(mine);
+    const v2Reader = (kind: FileKind, raw: unknown) => {
+      const r = raw as { schemaVersion: number; extra?: boolean };
+      if (r.schemaVersion === 2) { const { extra: _x, ...rest } = r; return readFile(kind, { ...rest, schemaVersion: 1 }); }
+      return readFile(kind, raw);
+    };
+    const broken = new Engine({ store: h.store, client: dropbox, leadership: new FakeLeadership(), buildId: 'build-2', seed: SEED, now: () => NOW, readFile: v2Reader, upgradeFile: () => ({ status: 'invalid', message: 'step exploded' }) });
+    await broken.init();
+    await h.store.setMeta('cursor', undefined);
+    await broken.drain();
+    await broken.drain();
+    expect(await h.store.getQueueRow(path)).toMatchObject({ pendingContent: mine, pendingVersion: 1, lastError: expect.stringMatching(/could not be upgraded: step exploded/) });
+    expect(dropbox.log.filter((l) => l.startsWith('upload'))).toEqual([]);
   });
 
   it('never overwrites a quarantined remote and holds the local write', async () => {
