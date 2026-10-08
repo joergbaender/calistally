@@ -648,6 +648,7 @@ describe('Engine seed and empty folder', () => {
     expect(a.engine.status.emptyFolder).toBe(true);
     expect(a.dropbox.paths()).toEqual([]);
     await a.engine.chooseEmptyFolder('seed');
+    expect(a.engine.status.emptyFolder).toBe(false);
     expect(a.dropbox.paths()).toEqual([EXERCISES_PATH]);
     expect((await a.store.catalog())?.exercises).toHaveLength(2);
     await a.engine.drain();
@@ -663,6 +664,24 @@ describe('Engine seed and empty folder', () => {
     await b.engine.drain();
     expect(b.engine.status.emptyFolder).toBe(false);
     expect((await b.store.catalog())?.exercises).toHaveLength(2);
+  });
+
+  it('ignores "copy" once the seed was chosen, and "seed" before a pull found the folder empty', async () => {
+    const a = await harness();
+    await a.engine.drain();
+    await a.engine.chooseEmptyFolder('seed');
+    const uploads = a.dropbox.log.filter((l) => l.startsWith('upload')).length;
+    await a.engine.chooseEmptyFolder('copy');
+    expect(a.engine.status).toMatchObject({ emptyFolder: false, emptyFolderChoice: 'seed' });
+    expect(await a.store.getMeta('emptyFolderChoice')).toBe('seed');
+    expect(a.dropbox.log.filter((l) => l.startsWith('upload')).length).toBe(uploads);
+
+    const b = await harness();
+    await b.engine.chooseEmptyFolder('seed');
+    expect(b.dropbox.paths()).toEqual([]);
+    expect(await b.store.catalog()).toBeUndefined();
+    expect(b.engine.status.emptyFolderChoice).toBeUndefined();
+    expect(await b.store.getMeta('emptyFolderChoice')).toBeUndefined();
   });
 });
 

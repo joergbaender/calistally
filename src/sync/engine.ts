@@ -149,18 +149,28 @@ export class Engine {
     return this.enqueue(() => this.push().then(() => undefined));
   }
 
-  /** The owner's answer on an empty App folder (spec 3 §11). */
+  /** The owner's answer on an empty App folder (spec 3 §11). 'seed' counts only while a pull
+   *  has found the folder empty; 'copy' is ignored once a catalog exists or the seed was chosen,
+   *  so copied files can never collide with a seeded catalog. */
   async chooseEmptyFolder(choice: EmptyFolderChoice): Promise<void> {
-    await this.store.setMeta('emptyFolderChoice', choice);
-    this.status.emptyFolderChoice = choice;
-    if (choice === 'seed') {
-      await this.enqueue(async () => {
-        await this.runSeed(true);
-        await this.push();
-      });
-    } else {
+    if (choice === 'copy') {
+      if (this.status.emptyFolderChoice === 'seed' || (await this.store.getRow(EXERCISES_PATH)) !== undefined) return;
+      await this.store.setMeta('emptyFolderChoice', choice);
+      this.status.emptyFolderChoice = choice;
       this.notify();
+      return;
     }
+    await this.enqueue(async () => {
+      if (!this.status.emptyFolder) return;
+      await this.store.setMeta('emptyFolderChoice', choice);
+      this.status.emptyFolderChoice = choice;
+      await this.runSeed(true);
+      if ((await this.store.getRow(EXERCISES_PATH)) !== undefined) {
+        this.status.emptyFolder = false;
+        this.notify();
+      }
+      await this.push();
+    });
   }
 
   /** No tokens: nothing runs until a login. Local writes still queue. */
