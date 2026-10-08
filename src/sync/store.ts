@@ -51,6 +51,8 @@ export interface Issue {
 export interface StoreEvents {
   /** A row changed locally or by the engine; the shell and other tabs refresh. */
   onChange?: (path: string) => void;
+  /** A successful writeFile only (never a pull-side save): the leader tab's engine pushes (spec 3 §5 step 3). */
+  onWrite?: (path: string) => void;
 }
 
 const UNEXPECTED_KEY = 'unexpectedPaths';
@@ -95,7 +97,10 @@ export class Store {
       await t.put('queue', entry);
       return validation.ok ? { ok: true } : { ok: true, heldBack: validation.issues };
     });
-    if (result.ok) this.events.onChange?.(path);
+    if (result.ok) {
+      this.events.onChange?.(path);
+      this.events.onWrite?.(path);
+    }
     return result;
   }
 

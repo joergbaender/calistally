@@ -63,6 +63,21 @@ describe('Store.writeFile', () => {
     expect(await store.issues()).toEqual([]);
   });
 
+  it('fires onWrite on a successful writeFile only, never on saveRow, mutate or a refused write', async () => {
+    const writes: string[] = [];
+    const changes: string[] = [];
+    const db = await openDb(new IDBFactory());
+    const store = new Store(db, { onChange: (p) => changes.push(p), onWrite: (p) => writes.push(p) });
+    await store.saveRow({ path: p1, kind: 'session', rev: 'r1', content: sessionFile(s1), status: 'ok', issues: [], version: 1 });
+    await store.mutate(p1, (row) => (row === undefined ? {} : { row: { ...row, rev: 'r2' } }));
+    expect(writes).toEqual([]);
+    await store.writeFile('session', p1, sessionFile({ ...s1, notes: 'z' }));
+    expect(writes).toEqual([p1]);
+    expect(await store.writeFile('session', p1, sessionFile(s1), new Date(), 99)).toEqual({ ok: false, reason: 'changed' });
+    expect(writes).toEqual([p1]);
+    expect(changes).toEqual([p1, p1, p1]);
+  });
+
   it('keeps rev, syncedAt and remoteDeleted of an existing row', async () => {
     const { store } = await makeStore();
     await store.saveRow({ path: p1, kind: 'session', rev: 'r7', content: sessionFile(s1), status: 'ok', issues: [], version: 4, syncedAt: '2030-01-01T00:00:00.000Z', remoteDeleted: true });
