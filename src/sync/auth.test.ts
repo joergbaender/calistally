@@ -116,6 +116,13 @@ describe('Auth.completeLogin', () => {
     await expect(auth.completeLogin('bad', 'v'.repeat(32))).rejects.toMatchObject({ code: 'unauthorized' });
     await expect(auth.completeLogin('bad', 'v'.repeat(32))).rejects.toMatchObject({ code: 'network' });
   });
+
+  it('refuses an incomplete token response and stores nothing', async () => {
+    const { auth, db } = await setup([json(200, { access_token: 'at1', token_type: 'bearer' })]);
+    await auth.startLogin();
+    await expect(auth.completeLogin('the-code', 'v'.repeat(32))).rejects.toMatchObject({ code: 'unauthorized', message: 'unexpected token response from Dropbox' });
+    expect(await auth.tokens()).toBeUndefined();
+  });
 });
 
 describe('Auth.accessToken and refresh', () => {
@@ -166,6 +173,28 @@ describe('Auth.signOut', () => {
     const { auth, db } = await setup([]);
     await db.setValue('auth', 'tokens', { refreshToken: 'rt', accessToken: 'at', expiresAt: '2030-05-01T14:00:00.000Z' });
     await auth.signOut();
+    expect(await auth.isConnected()).toBe(false);
+  });
+
+  it('leaves no tokens when signOut runs during a pending refresh', async () => {
+    const { auth, db } = await setup([json(200, { access_token: 'at-new', expires_in: 14400 })]);
+    await db.setValue('auth', 'tokens', { refreshToken: 'rt', accessToken: 'at', expiresAt: '2030-05-01T10:04:00.000Z' });
+    const refreshPromise = auth.accessToken();
+    const signOutPromise = auth.signOut();
+    // Both run concurrently; the refresh may succeed but tokens are cleared by signOut
+    await Promise.all([refreshPromise, signOutPromise]);
+    expect(await auth.tokens()).toBeUndefined();
+  });
+
+  it('revokes with a fresh access token on sign out with an expired token', async () => {
+    const { auth, db, calls } = await setup([
+      json(200, { access_token: 'at-fresh', expires_in: 14400 }),
+      () => new Response('', { status: 200 }),
+    ]);
+    await db.setValue('auth', 'tokens', { refreshToken: 'rt', accessToken: 'at-stale', expiresAt: '2030-05-01T09:00:00.000Z' });
+    await auth.signOut();
+    expect(calls[0]).toMatchObject({ url: 'https://api.dropboxapi.com/oauth2/token' });
+    expect(calls[1]).toMatchObject({ url: 'https://api.dropboxapi.com/2/auth/token/revoke', init: { method: 'POST', headers: { Authorization: 'Bearer at-fresh' } } });
     expect(await auth.isConnected()).toBe(false);
   });
 });

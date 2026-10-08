@@ -110,9 +110,14 @@ export class Auth {
     const body = new URLSearchParams({ grant_type: 'authorization_code', code, client_id: this.config.appKey, code_verifier: pending.verifier });
     if (pending.mode === 'redirect') body.set('redirect_uri', this.config.redirectUri);
     const json = await this.tokenRequest(body);
+    const refreshToken = String(json['refresh_token']);
+    const accessToken = String(json['access_token']);
+    if (!refreshToken || refreshToken === 'undefined' || !accessToken || accessToken === 'undefined') {
+      throw new AuthError('unauthorized', 'unexpected token response from Dropbox');
+    }
     const tokens: Tokens = {
-      refreshToken: String(json['refresh_token']),
-      accessToken: String(json['access_token']),
+      refreshToken,
+      accessToken,
       expiresAt: this.expiry(json['expires_in']),
     };
     await this.db.tx(['auth'], 'readwrite', async (t) => {
@@ -151,19 +156,26 @@ export class Auth {
     if (t === undefined) throw new AuthError('unauthorized', 'not connected');
     const body = new URLSearchParams({ grant_type: 'refresh_token', refresh_token: t.refreshToken, client_id: this.config.appKey });
     const json = await this.tokenRequest(body);
-    const next: Tokens = { ...t, accessToken: String(json['access_token']), expiresAt: this.expiry(json['expires_in']) };
+    const accessToken = String(json['access_token']);
+    if (!accessToken || accessToken === 'undefined') {
+      throw new AuthError('unauthorized', 'unexpected token response from Dropbox');
+    }
+    const currentTokens = await this.tokens();
+    if (currentTokens === undefined) throw new AuthError('unauthorized', 'signed out');
+    const next: Tokens = { ...currentTokens, accessToken, expiresAt: this.expiry(json['expires_in']) };
     await this.db.setValue('auth', 'tokens', next);
     return next.accessToken;
   }
 
   /** Revokes the refresh token at Dropbox and forgets it locally. The caller clears the data stores. */
   async signOut(): Promise<void> {
-    const t = await this.tokens();
-    if (t !== undefined) {
+    if (await this.isConnected()) {
       try {
-        await this.deps.fetch(this.config.revokeUrl ?? REVOKE_URL, { method: 'POST', headers: { Authorization: `Bearer ${t.accessToken}` } });
+        const token = await this.accessToken();
+        const res = await this.deps.fetch(this.config.revokeUrl ?? REVOKE_URL, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+        // Ignore non-ok responses; the token is revoked locally regardless of the server's reply.
       } catch {
-        // Offline: the token stays valid at Dropbox until the owner unlinks the app; local state is cleared anyway.
+        // Offline or refresh failed: the token stays valid at Dropbox until the owner unlinks the app; local state is cleared anyway.
       }
     }
     await this.db.delete('auth', 'tokens');
