@@ -202,7 +202,11 @@ export class DropboxHttpClient implements DropboxClient {
     }
     if (!(res instanceof Response)) return { ok: false, error: 'offline', message: res.message };
     if (res.ok) return { ok: true, res };
-    const text = await res.text();
+    const failed = res;
+    const body = await this.readResponseBody(() => failed.text());
+    // A body that cannot be read at all (dropped connection, abort) is a network failure.
+    if (!body.ok) return { ok: false, error: 'offline', message: body.message };
+    const text = body.value;
     if (res.status === 401) return { ok: false, error: 'unauthorized', message: text };
     if (res.status === 429) {
       const header = res.headers.get('Retry-After');
