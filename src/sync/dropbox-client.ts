@@ -102,7 +102,9 @@ export class DropboxHttpClient implements DropboxClient {
     if (meta === null) return { ok: false, error: 'other', message: 'download without Dropbox-API-Result header' };
     let rev: string;
     try {
-      rev = (JSON.parse(meta) as { rev: string }).rev;
+      const parsed = JSON.parse(meta) as { rev?: unknown };
+      if (typeof parsed.rev !== 'string') return { ok: false, error: 'other', message: 'download missing rev in Dropbox-API-Result' };
+      rev = parsed.rev;
     } catch (e) {
       return { ok: false, error: 'other', message: `garbled Dropbox-API-Result: ${e instanceof Error ? e.message : String(e)}` };
     }
@@ -217,7 +219,7 @@ export class DropboxHttpClient implements DropboxClient {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       // AbortError/TimeoutError/TypeError from network failure or stream abort
-      if (e instanceof TypeError || e?.constructor?.name === 'AbortError' || e?.constructor?.name === 'TimeoutError') {
+      if (e instanceof TypeError || ((e instanceof Error || e instanceof DOMException) && (e.name === 'AbortError' || e.name === 'TimeoutError'))) {
         return { ok: false, error: 'offline', message: msg };
       }
       // SyntaxError from JSON.parse, or other parse failures

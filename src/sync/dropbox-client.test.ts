@@ -152,4 +152,19 @@ describe('DropboxHttpClient errors', () => {
     const { client } = harness([() => new Response('{}', { status: 200, headers: { 'Dropbox-API-Result': 'not valid json!!!' } })]);
     expect(await client.download('/test.json')).toMatchObject({ ok: false, error: 'other', message: /garbled/ });
   });
+
+  it.each([
+    { name: 'TimeoutError' as const, msg: 'timed out' },
+    { name: 'AbortError' as const, msg: 'aborted' },
+  ])('maps a response-body DOMException $name to offline', async ({ name, msg }) => {
+    const { client } = harness([
+      () => new Response(new ReadableStream<Uint8Array>({ start(c) { c.error(new DOMException(msg, name)); } }), { status: 200, headers: { 'Dropbox-API-Result': JSON.stringify({ rev: 'r1', path_lower: '/test.json' }) } }),
+    ]);
+    expect(await client.download('/test.json')).toMatchObject({ ok: false, error: 'offline' });
+  });
+
+  it('maps a download with missing rev in Dropbox-API-Result to other', async () => {
+    const { client } = harness([() => new Response('{}', { status: 200, headers: { 'Dropbox-API-Result': '{}' } })]);
+    expect(await client.download('/test.json')).toMatchObject({ ok: false, error: 'other', message: /missing rev/ });
+  });
 });
