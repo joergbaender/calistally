@@ -12,9 +12,9 @@ function buildId(): string {
   return `${hash} ${new Date().toISOString().slice(0, 16).replace('T', ' ')}Z`;
 }
 
-// Spec 3 §9: GitHub Pages serves the app at /calistally/; dev stays at http://localhost:5173/.
-export default defineConfig(({ command }) => ({
-  base: command === 'build' ? '/calistally/' : '/',
+// Spec 3 §9: dev stays at http://localhost:5173/; build and preview serve at /calistally/.
+export default defineConfig(({ command, isPreview }) => ({
+  base: command === 'build' || isPreview ? '/calistally/' : '/',
   define: { __BUILD_ID__: JSON.stringify(buildId()) },
   server: { port: 5173, strictPort: true },
   preview: { port: 5173, strictPort: true },
