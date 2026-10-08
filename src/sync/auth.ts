@@ -172,7 +172,7 @@ export class Auth {
     if (await this.isConnected()) {
       try {
         const token = await this.accessToken();
-        const res = await this.deps.fetch(this.config.revokeUrl ?? REVOKE_URL, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+        await this.deps.fetch(this.config.revokeUrl ?? REVOKE_URL, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
         // Ignore non-ok responses; the token is revoked locally regardless of the server's reply.
       } catch {
         // Offline or refresh failed: the token stays valid at Dropbox until the owner unlinks the app; local state is cleared anyway.
