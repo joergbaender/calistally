@@ -104,6 +104,7 @@ async function main(): Promise<void> {
   async function signOut(): Promise<void> {
     if (engine.status.queueLength > 0 && !window.confirm(`${engine.status.queueLength} change(s) have not reached Dropbox yet and will be lost. Sign out anyway?`)) return;
     engine.dispose();
+    await Promise.race([engine.idle(), new Promise<void>((r) => setTimeout(r, 10_000))]);
     await auth.signOut();
     await db.clearAll();
     window.location.reload();
