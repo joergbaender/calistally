@@ -140,4 +140,16 @@ describe('DropboxHttpClient errors', () => {
     expect(await client.revokeToken()).toEqual({ ok: true, value: undefined });
     expect(calls[0]).toMatchObject({ url: 'https://api.dropboxapi.com/2/auth/token/revoke', headers: { Authorization: 'Bearer tok' } });
   });
+
+  it('maps a response-body stream error to offline', async () => {
+    const { client } = harness([
+      () => new Response(new ReadableStream<Uint8Array>({ start(c) { c.error(new TypeError('network error')); } }), { status: 200, headers: { 'Dropbox-API-Result': JSON.stringify({ rev: 'r1', path_lower: '/test.json' }) } }),
+    ]);
+    expect(await client.download('/test.json')).toMatchObject({ ok: false, error: 'offline' });
+  });
+
+  it('maps a garbled Dropbox-API-Result header to other', async () => {
+    const { client } = harness([() => new Response('{}', { status: 200, headers: { 'Dropbox-API-Result': 'not valid json!!!' } })]);
+    expect(await client.download('/test.json')).toMatchObject({ ok: false, error: 'other', message: /garbled/ });
+  });
 });

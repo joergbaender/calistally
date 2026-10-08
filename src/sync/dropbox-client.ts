@@ -100,8 +100,15 @@ export class DropboxHttpClient implements DropboxClient {
     if (!raw.ok) return raw;
     const meta = raw.res.headers.get('Dropbox-API-Result');
     if (meta === null) return { ok: false, error: 'other', message: 'download without Dropbox-API-Result header' };
-    const { rev } = JSON.parse(meta) as { rev: string };
-    return { ok: true, value: { rev, text: await raw.res.text() } };
+    let rev: string;
+    try {
+      rev = (JSON.parse(meta) as { rev: string }).rev;
+    } catch (e) {
+      return { ok: false, error: 'other', message: `garbled Dropbox-API-Result: ${e instanceof Error ? e.message : String(e)}` };
+    }
+    const text = await this.readResponseBody(() => raw.res.text());
+    if (!text.ok) return text;
+    return { ok: true, value: { rev, text: text.value } };
   }
 
   async upload(path: string, text: string, mode: UploadMode): Promise<DropboxResult<{ rev: string }>> {
@@ -116,14 +123,17 @@ export class DropboxHttpClient implements DropboxClient {
     };
     const raw = await this.content('files/upload', arg, bytes, whenTag('conflict', 'conflict'));
     if (!raw.ok) return raw;
-    const meta = (await raw.res.json()) as { rev: string };
-    return { ok: true, value: { rev: meta.rev } };
+    const meta = await this.readResponseBody(() => raw.res.json() as Promise<{ rev: string }>);
+    if (!meta.ok) return meta;
+    return { ok: true, value: { rev: meta.value.rev } };
   }
 
   async downloadZip(path: string): Promise<DropboxResult<ArrayBuffer>> {
     const raw = await this.content('files/download_zip', { path }, undefined, whenTag('not_found', 'missing'));
     if (!raw.ok) return raw;
-    return { ok: true, value: await raw.res.arrayBuffer() };
+    const buffer = await this.readResponseBody(() => raw.res.arrayBuffer());
+    if (!buffer.ok) return buffer;
+    return { ok: true, value: buffer.value };
   }
 
   async revokeToken(): Promise<DropboxResult<void>> {
@@ -153,7 +163,9 @@ export class DropboxHttpClient implements DropboxClient {
       classify409,
     );
     if (!raw.ok) return raw;
-    return { ok: true, value: (await raw.res.json()) as T };
+    const body = await this.readResponseBody(() => raw.res.json() as Promise<T>);
+    if (!body.ok) return body;
+    return { ok: true, value: body.value };
   }
 
   private content(endpoint: string, arg: unknown, body: Uint8Array | undefined, classify409: Classify): Promise<Raw> {
@@ -197,6 +209,20 @@ export class DropboxHttpClient implements DropboxClient {
     if (res.status === 409) return { ok: false, error: classify409(errorTags(text)), message: text };
     if (res.status >= 500) return { ok: false, error: 'offline', message: `Dropbox returned ${res.status}` };
     return { ok: false, error: 'other', message: `Dropbox returned ${res.status}: ${text}` };
+  }
+
+  private async readResponseBody<T>(fn: () => Promise<T>): Promise<DropboxResult<T>> {
+    try {
+      return { ok: true, value: await fn() };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // AbortError/TimeoutError/TypeError from network failure or stream abort
+      if (e instanceof TypeError || e?.constructor?.name === 'AbortError' || e?.constructor?.name === 'TimeoutError') {
+        return { ok: false, error: 'offline', message: msg };
+      }
+      // SyntaxError from JSON.parse, or other parse failures
+      return { ok: false, error: 'other', message: msg };
+    }
   }
 
   private async fetchOnce(url: string, init: RequestInit, token: string, timeoutMs: number): Promise<Response | { message: string }> {
