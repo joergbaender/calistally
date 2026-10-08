@@ -13,15 +13,26 @@ import { attachTriggers } from './triggers';
 /** Wires the sync library to the browser (spec 3 §12, §13). */
 async function main(): Promise<void> {
   const root = document.getElementById('app') as HTMLElement;
+  // Declared before anything that can call scheduleRender (store events, the SW prompt); renders
+  // start once the model exists, and the last line of main() renders the state as it is then.
+  let renderQueued = false;
+  let renderReady = false;
+  // The engine is created after the store; a local write nudges it through this late binding
+  // (BroadcastChannel never delivers to the posting tab).
+  let engineRef: Engine | undefined;
   const db = await openDb();
   const channel = new BroadcastChangeChannel();
-  const store = new Store(db, { onChange: (path) => { channel.post(path); scheduleRender(); } });
+  const store = new Store(db, {
+    onChange: (path) => { channel.post(path); scheduleRender(); },
+    onWrite: () => { engineRef?.requestPush(); },
+  });
   const auth = new Auth(db, { appKey: DROPBOX_APP_KEY, redirectUri: redirectUri() }, { fetch: (input, init) => fetch(input, init) });
   const client = new DropboxHttpClient({
     fetch: (input, init) => fetch(input, init),
     tokens: { accessToken: () => auth.accessToken(), refresh: () => auth.refresh() },
   });
   const engine = new Engine({ store, client, leadership: new WebLocksLeadership(), channel, buildId: BUILD_ID });
+  engineRef = engine;
   await engine.init();
   const sw = setupSwUpdate(scheduleRender);
 
@@ -60,9 +71,8 @@ async function main(): Promise<void> {
     model.persisted = undefined;
   }
 
-  let renderQueued = false;
   function scheduleRender(): void {
-    if (renderQueued) return;
+    if (!renderReady || renderQueued) return;
     renderQueued = true;
     queueMicrotask(() => { renderQueued = false; void render(); });
   }
@@ -102,7 +112,9 @@ async function main(): Promise<void> {
   }
 
   async function signOut(): Promise<void> {
-    if (engine.status.queueLength > 0 && !window.confirm(`${engine.status.queueLength} change(s) have not reached Dropbox yet and will be lost. Sign out anyway?`)) return;
+    // Read the queue itself: engine.status.queueLength lags (and never updates in a non-leader tab).
+    const pending = (await store.queue()).length;
+    if (pending > 0 && !window.confirm(`${pending} change(s) have not reached Dropbox yet and will be lost. Sign out anyway?`)) return;
     engine.dispose();
     await Promise.race([engine.idle(), new Promise<void>((r) => setTimeout(r, 10_000))]);
     await auth.signOut();
@@ -112,6 +124,9 @@ async function main(): Promise<void> {
 
   let checkedForTooNew = false;
   engine.subscribe((status) => {
+    // Spec 3 §12: a revoked login stops the engine; the shell then offers "Connect again",
+    // with the local data and the queue kept.
+    model.connected = status.connected;
     // Spec 3 §8: a file newer than this app means a newer build exists; look for it at once.
     if (status.tooNewSeen && !checkedForTooNew) {
       checkedForTooNew = true;
@@ -124,6 +139,7 @@ async function main(): Promise<void> {
     sw.check().catch(() => undefined);
     void engine.drain();
   }
+  renderReady = true;
   scheduleRender();
 }
 
