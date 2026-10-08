@@ -165,7 +165,7 @@ export const SHEET_YEAR = 2026;
 export const MIGRATION_STAMP = '2026-10-07T00:00:00.000Z';
 
 /** Spec 2 §8 "Bodyweight" (decision M15). */
-export const BODYWEIGHT_KG = 73;
+export const BODYWEIGHT_KG = 80;
 ```
 
 - [ ] **Step 5: Write the failing tests `src/migration/grid.test.ts`**
