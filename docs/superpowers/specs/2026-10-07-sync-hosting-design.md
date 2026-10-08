@@ -46,7 +46,7 @@ Spec 3 is done when:
 - App Console → Create app → **Scoped access** → **App folder** → name `CalisTally`, app folder name `CalisTally`. If the name is taken, the next free variant (for example `CalisTally Log`); the folder name is what the owner sees under `Dropbox/Apps/`, the app name is cosmetic.
 - Permissions: `files.metadata.read`, `files.content.read`, `files.content.write`. Nothing else.
 - Redirect URIs: `https://joergbaender.github.io/calistally/` and `http://localhost:5173/`. Dropbox accepts plain `http` for localhost only.
-- Access token expiration: short-lived (the console default).
+- Access token expiration: short-lived. The console has no setting for it: new apps only get short-lived access tokens, and `token_access_type=offline` adds the refresh token.
 - The **app key is public** and lives in `src/app/config.ts`. There is no client secret anywhere; PKCE replaces it. Development status is fine for one user.
 
 ### Login (authorization code with PKCE)
@@ -329,6 +329,6 @@ Longpoll; CSV export (`export/sets.csv`, spec 4, a plain overwrite outside the m
 
 ## 17. To fill in once known
 
-- The Dropbox app key (goes into `src/app/config.ts`).
-- The final app and folder name if `CalisTally` is taken.
-- The date of the first deploy and of the repository recreation.
+- The Dropbox app key: in `src/app/config.ts` since 2026-10-08.
+- The final app and folder name: `CalisTally`, as planned.
+- The first deploy and the repository recreation: both on 2026-10-08.
