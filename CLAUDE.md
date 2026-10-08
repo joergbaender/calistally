@@ -64,6 +64,5 @@ Vite + TypeScript PWA (`vite-plugin-pwa`, Workbox precache of the shell only), n
 
 ## To fill in later
 
-- The Dropbox app key in `src/app/config.ts` (after the owner creates the app), and the final app name if `CalisTally` was taken.
 - Spec 4: the training views; the UI framework choice; the issues screen replacing the shell.
 - Lint/format tooling (none yet).

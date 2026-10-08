@@ -3,7 +3,7 @@
 declare const __BUILD_ID__: string;
 
 /** From the Dropbox App Console once the app exists (spec 3 §17). */
-export const DROPBOX_APP_KEY = 'REPLACE_WITH_DROPBOX_APP_KEY';
+export const DROPBOX_APP_KEY = 'sdyp6j5t67hgf0n';
 
 /** '/calistally/' on GitHub Pages, '/' in dev (vite.config.ts). */
 export const BASE_URL: string = import.meta.env.BASE_URL;
