@@ -966,7 +966,7 @@ if (values === undefined) {
 
 - [ ] **Step 6: Move the other tests off the old constant**
 
-In `src/migration/build.test.ts`, `src/migration/output.test.ts` and `src/migration/review.test.ts` replace every `bodyweightKg: 80` with `bodyweightKg: 80`, and in `build.test.ts` replace `kg: 80, note: 'estimated, constant 80 kg` with `kg: 80, note: 'estimated, constant 80 kg`. (`grep -rn "73" src/migration` must then show nothing except dates.)
+In `src/migration/build.test.ts`, `src/migration/output.test.ts` and `src/migration/review.test.ts` the `OPTIONS` objects (and one inline options object in `review.test.ts`) carry `bodyweightKg: <old value>`: make every one `bodyweightKg: 80`. In `build.test.ts` the bodyweight expectation reads `kg: <old value>, note: 'estimated, constant <old value> kg through 2030 (migration)'`: make it `kg: 80, note: 'estimated, constant 80 kg through 2030 (migration)'`. Afterwards `grep -rn "bodyweightKg" src/migration` shows only `80` and the type/arg uses.
 
 - [ ] **Step 7: Run the migration tests and the typecheck**
 
@@ -982,163 +982,24 @@ git commit -m "Take the migration's bodyweight from a required --bodyweight opti
 
 ---
 
-### Task 4: Scrub the docs (§10)
+### Task 4: Verify the docs scrub (§10)
 
-**Files:**
-- Modify: `docs/HANDOVER.md`, `docs/tracker-options.md`, `docs/superpowers/specs/2026-10-06-data-model-design.md`, `docs/superpowers/specs/2026-10-07-xlsx-migration-design.md`, `docs/superpowers/plans/2026-10-06-data-model.md`, `docs/superpowers/plans/2026-10-07-xlsx-migration.md`, `CLAUDE.md`, `src/migration/sheet.ts`
+**Files:** none to change. The scrub itself (the owner's name → "the owner", the bodyweight figure removed, every dated remark and address-plus-value cell replaced by a synthetic stand-in; option 1 chosen by the owner on 2026-10-08) was applied during planning and is already committed on this branch ("Remove the owner's name, bodyweight and dated sheet cells from the docs"). The replacement table deliberately lives **outside the repository**, in `<private folder>\calistally-private\scrub-docs.mjs` (next to `replacements.txt` and `mailmap.txt` for the history rewrite), because a table of the original strings inside git would undo the scrub. Never copy it into the repo or into this plan.
 
-The rule (§10, option 1 chosen by the owner on 2026-10-08): the owner's name becomes "the owner" everywhere; the bodyweight figure disappears; every dated remark about the real sheet and every one-off cell quoted with its address and value gets a synthetic stand-in. Generic notation examples and the migration's test inputs stay. The script below is the complete list of replacements; it is idempotent.
-
-- [ ] **Step 1: Write the script to the scratchpad** (not into the repo) as `scrub-docs.mjs`:
-
-```js
-// One-off: replaces diary-like sheet content in the docs with synthetic values (spec 3 §10, option 1).
-// Usage: node scrub-docs.mjs <repo root>
-import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-
-const root = process.argv[2] ?? '.';
-const docs = [
-  'docs/HANDOVER.md',
-  'docs/tracker-options.md',
-  'docs/superpowers/specs/2026-10-06-data-model-design.md',
-  'docs/superpowers/specs/2026-10-07-xlsx-migration-design.md',
-  'docs/superpowers/plans/2026-10-07-xlsx-migration.md',
-];
-
-// Exact strings, longest first where one contains another. Values are invented; shapes are kept.
-const TABLE = [
-  // the G9 dips cell (M3)
-  ['6,5kg 13,2x 11,2x', '6,5kg 13,2x 11,2x'],
-  ['6,5kg 13x 13x 11x 11x', '6,5kg 13x 13x 11x 11x'],
-  ['`13x 13x 11x 11x`', '`13x 13x 11x 11x`'],
-  ['6.5 kg backpack', '6.5 kg backpack'],
-  ['13,2x meant 13 twice', '13,2x meant 13 twice'],
-  ['13.2 reps is a legal value', '13.2 reps is a legal value'],
-  ['`13,2x` / `11,2x`', '`13,2x` / `11,2x`'],
-  ['`13,2x` and `11,2x` (G9)', '`13,2x` and `11,2x` (G9)'],
-  ['`13,2x`: typo', '`13,2x`: typo'],
-  ['`16,5x`, `13,2x`, `12,5x`', '`16,5x`, `13,2x`, `12,5x`'],
-  ['but `13,2x` needs a definition', 'but `13,2x` needs a definition'],
-  // the M16 RDL cell (M4)
-  ['20x 2 mit 15,4 kg (R 1x 15)', '20x 2 mit 15,4 kg (R 1x 15)'],
-  ['Only `20x 2 mit 15,4 kg` counts', 'Only `20x 2 mit 15,4 kg` counts'],
-  ['"text": "20x 2 mit 15,4 kg", "why": "(R 1x 15) ignored (M4)"', '"text": "20x 2 mit 15,4 kg", "why": "(R 1x 15) ignored (M4)"'],
-  ['`(R 1x 15)` in M16', '`(R 1x 15)` in M16'],
-  ['| `parenthesised-numbers` | `(R 1x 15)` |', '| `parenthesised-numbers` | `(R 1x 15)` |'],
-  ['M16 ignore `(R 1x 15)`', 'M16 ignore `(R 1x 15)`'],
-  // bands and lateral raises (M5, M6)
-  ['D41 `10Kg 25x 25x 25x 25x`', 'D41 `10Kg 25x 25x 25x 25x`'],
-  ['C9 `SZ Hantel`', 'C9 `SZ Hantel`'],
-  ['C9 `8kg SZ Hantel`, D9 `12kg Maschine`', 'C9 `8kg SZ Hantel`, D9 `12kg Maschine`'],
-  ['"text": "Lateral raises 10kg 25x 25x 24x 20x"', '"text": "Lateral raises 10kg 25x 25x 24x 20x"'],
-  ['"text": "Lateral Raises 10kg 25x 25x 25x 25x"', '"text": "Lateral Raises 10kg 25x 25x 25x 25x"'],
-  // rings in the dips column (M2)
-  ['`Rings Downs 12x Start with 1m Rest`, `Rings 20x 18x` and `Ring deficit pushups 12 down`', '`Rings Downs 12x Start with 1m Rest`, `Rings 20x 18x` and `Ring deficit pushups 12 down`'],
-  ['`Rings Downs 12x Start with 1m Rest`', '`Rings Downs 12x Start with 1m Rest`'],
-  // H38 diamonds (M8)
-  ['H38 `Diamonds 4x 20` is the one exception (4 sets of 20)', 'H38 `Diamonds 4x 20` is the one exception (4 sets of 20)'],
-  ['"text": "Diamonds 20x 20x 20x 20x", "why": "4x 20 = 4 sets of 20 (M8)"', '"text": "Diamonds 20x 20x 20x 20x", "why": "4x 20 = 4 sets of 20 (M8)"'],
-  ['H38 `4x 20`', 'H38 `4x 20`'],
-  // G29 dips (M11), B40 and D40 (M12)
-  ['G29 `Dips Downs 12x Start with 1m Rest / plus 8x 3`', 'G29 `Dips Downs 12x Start with 1m Rest / plus 8x 3`'],
-  ['The three eights are the tail', 'The three eights are the tail'],
-  ['B40 `Jump Squats 12x 4`, D40 `Calve Raises 25x 3`', 'B40 `Jump Squats 12x 4`, D40 `Calve Raises 25x 3`'],
-  ['"Calve Raises 25x 3" (D40)', '"Calve Raises 25x 3" (D40)'],
-  // dates that were confirmed or repaired
-  ['`05.08` between `31.08` and `08.09` → `05.09`; `24.06` between `20.05` and `28.05`, and a duplicate of a later `24.06` → `24.05`', '`05.08` between `31.08` and `08.09` → `05.09`; `24.06` between `20.05` and `28.05`, and a duplicate of a later `24.06` → `24.05`'],
-  ['(`06.07` above `03.07`)', '(`06.07` above `03.07`)'],
-  ['`27.04.206`', '`27.04.206`'],
-  ['"A49": { "date": "2026-09-05" }', '"A49": { "date": "2026-09-05" }'],
-  ['12.06.2026 Pullups 2x die 5er Pyramide', '12.06.2026 Pullups 2x die 5er Pyramide'],
-  ['`09.07. 100x Dipbar Knee Raises`', '`09.07. 100x Dipbar Knee Raises`'],
-  ['Jan → Oct 2026', 'Jan → Oct 2026'],
-  ['became diamond push-ups from mid-year', 'became diamond push-ups from mid-year'],
-  // bodyweight
-  ['One `bodyweight.json` entry at the earliest session date, marked as an estimate; the kg comes from the `--bodyweight` option (spec 3 §10), never from the repo.', 'One `bodyweight.json` entry at the earliest session date, marked as an estimate; the kg comes from the `--bodyweight` option (spec 3 §10), never from the repo.'],
-  ['One entry: `kg` = the `--bodyweight` value, `date` = the earliest session date in the output (a proposed one, usually), `note: "estimated, constant <kg> kg through 2026 (migration)"`.', 'One entry: `kg` = the `--bodyweight` value, `date` = the earliest session date in the output (a proposed one, usually), `note: "estimated, constant <kg> kg through 2026 (migration)"`.'],
-  ["`MIGRATION_STAMP = '2026-10-07T00:00:00.000Z'`, `MIGRATION_NAMESPACE", "`MIGRATION_STAMP = '2026-10-07T00:00:00.000Z'`, `MIGRATION_NAMESPACE"],
-  ['export const BODYWEIGHT_KG = 73;\n', ''],
-  ['/** Spec 2 §8 "Bodyweight" (decision M15). */\n', ''],
-  ["import { MIGRATION_STAMP, SHEET_YEAR } from './sheet';", "import { MIGRATION_STAMP, SHEET_YEAR } from './sheet';"],
-  ['bodyweightKg: args.bodyweightKg }', 'bodyweightKg: args.bodyweightKg }'],
-  ["kg: 80, note: 'estimated, constant 80 kg", "kg: 80, note: 'estimated, constant 80 kg"],
-  ['bodyweightKg: 80', 'bodyweightKg: 80'],
-  // the spec 2 plan's test code, kept consistent with the renamed cells above
-  ['(R 1x 15)', '(R 1x 15)'],
-  ['6,5kg 13,2x', '6,5kg 13,2x'],
-  ['6,5kg 13x 13x', '6,5kg 13x 13x'],
-  ['Diamonds 4x 20', 'Diamonds 4x 20'],
-  ['Calve Raises 25x 3', 'Calve Raises 25x 3'],
-  // remaining dated remarks in the brief and the option analysis
-  ['holds negative pull-ups from late April', 'holds negative pull-ups from late April'],
-  ['`31.01.26`, `09.02.2026`', '`31.01.26`, `09.02.2026`'],
-  ['F22 `02,05.2026`, F23 `06,05.2026`, A34 `03.07..2026`', 'F22 `02,05.2026`, F23 `06,05.2026`, A34 `03.07..2026`'],
-  ['`05.08.2026` (A49) sits between 31.08 and 08.09, so likely 05.09. F27 is 24.**06** between 20.05 and 28.05, so likely 24.05. A33 (06.07) comes before A34 (03.07)', '`05.08.2026` (A49) sits between 31.08 and 08.09, so likely 05.09. F27 is 24.**06** between 20.05 and 28.05, so likely 24.05. A33 (06.07) comes before A34 (03.07)'],
-  ['(`12.06.2026 Pullups…`)', '(`12.06.2026 Pullups…`)'],
-  ['`02,05.2026` (F22), `06,05.2026` (F23), `03.07..2026` (A34)', '`02,05.2026` (F22), `06,05.2026` (F23), `03.07..2026` (A34)'],
-  ['`12.06.2026 Pullups …`', '`12.06.2026 Pullups …`'],
-  ['pull-up pyramids from late May', 'pull-up pyramids from late May'],
-  ['H is diamond push-ups from late June', 'H is diamond push-ups from late June'],
-  ['A49 `05.08.2026` (between 31.08 and 08.09, likely 05.09), F27 24.06 (between 20.05 and 28.05, likely 24.05), and A33 06.07 placed before A34 03.07', 'A49 `05.08.2026` (between 31.08 and 08.09, likely 05.09), F27 24.06 (between 20.05 and 28.05, likely 24.05), and A33 06.07 placed before A34 03.07'],
-  ["G6: '6,5kg 15x 13x'", "G6: '6,5kg 15x 13x'"],
-];
-
-// The owner's name, everywhere in these files plus CLAUDE.md and the one code comment (spec 3 §10).
-for (const rel of [...docs, 'docs/superpowers/plans/2026-10-06-data-model.md', 'CLAUDE.md', 'src/migration/sheet.ts']) {
-  const file = join(root, rel);
-  let text = readFileSync(file, 'utf8');
-  const before = text;
-  text = text.replace(/the owner's/g, "the owner's").replace(/the owner/g, 'the owner');
-  text = text.replace(/(^|[.!?:]\s+|\.\*\*\s+|\|\s+|\*\*|> |\(\s*)the owner/gm, (_m, p) => `${p}The owner`);
-  if (text !== before) {
-    writeFileSync(file, text);
-    console.log(`${rel}: name replaced`);
-  }
-}
-
-let total = 0;
-for (const rel of docs) {
-  const file = join(root, rel);
-  let text = readFileSync(file, 'utf8');
-  for (const [from, to] of TABLE) {
-    if (from === to) continue;
-    const count = text.split(from).length - 1;
-    if (count === 0) continue;
-    text = text.split(from).join(to);
-    total += count;
-    console.log(`${rel}: ${count}× ${JSON.stringify(from).slice(0, 60)}`);
-  }
-  writeFileSync(file, text);
-}
-console.log(`${total} replacements`);
-```
-
-- [ ] **Step 2: Run it from the repo root**
-
-```powershell
-node <scratchpad>/scrub-docs.mjs .
-```
-Expected: a line per replacement and a total of about 90, plus "name replaced" for the files that still carried it.
-
-- [ ] **Step 3: Verify nothing is left**
+- [ ] **Step 1: Verify nothing is left**
 
 ```bash
-grep -rn "the owner\|Joerg\|73 kg\|kg: 73\|BODYWEIGHT_KG\|17,2x\|8,5kg\|2026-09-03\|03\.08\.2026\|25\.06\|23\.05\|07\.06\.2026\|01,05\.2026\|(R 1x 15)" docs CLAUDE.md src scripts | grep -v "sync-hosting\|\.test\.ts"
+grep -rn -i "jörg\|joerg" docs CLAUDE.md src scripts | grep -v "joergbaender"
+grep -rn "BODYWEIGHT_KG" docs src scripts | grep -v "sync-hosting"
 ```
-Expected: no output. (The spec 3 document and the migration tests are excluded on purpose: spec 3 §10 describes the scrub, and the tests keep their inputs.) Then `grep -rn "the owner" docs | grep -c "" ` is around 60, and a skim of `docs/superpowers/specs/2026-10-06-data-model-design.md` §1 and §11 reads naturally ("The owner's answers …").
+Expected: both print nothing (`joergbaender` is the GitHub handle in URLs and stays). Then `node "<private folder>\calistally-private\scrub-docs.mjs" .` from the repo root prints `0 replacements` and no "name replaced" line: the table has nothing left to do.
 
-- [ ] **Step 4: Run the tests**
+- [ ] **Step 2: Run the tests**
 
 Run: `npm test`
-Expected: PASS (docs do not affect tests; this guards against an accidental code edit).
+Expected: PASS.
 
-- [ ] **Step 5: Commit**
-
-```bash
-git add docs CLAUDE.md src/migration/sheet.ts
-git commit -m "Remove the owner's name, bodyweight and dated sheet cells from the docs" -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
-```
+No commit: nothing changed.
 
 ---
 
@@ -5162,26 +5023,13 @@ These steps are not for subagents. Each destructive one is confirmed with the ow
    git clone https://github.com/joergbaender/calistally.git calistally-rewrite
    cd calistally-rewrite
    ```
-2. Mapping files (in the parent folder, never committed). `replacements.txt`:
-   ```
-   the owner's==>the owner's
-   the owner==>the owner
-   170411984+joergbaender@users.noreply.github.com==>170411984+joergbaender@users.noreply.github.com
-   170411984+joergbaender@users.noreply.github.com==>170411984+joergbaender@users.noreply.github.com
-   ```
-   `mailmap.txt`:
-   ```
-   joergbaender <170411984+joergbaender@users.noreply.github.com> <170411984+joergbaender@users.noreply.github.com>
-   joergbaender <170411984+joergbaender@users.noreply.github.com> <170411984+joergbaender@users.noreply.github.com>
-   ```
-3. Rewrite. `git filter-repo` needs Python (not installed on the PC; `winget install Python.Python.3.12` then `pip install git-filter-repo`), or use the built-in fallback:
+2. Mapping files, already prepared in `<private folder>\calistally-private\` (never committed): `replacements.txt` (one `original==>replacement` line per scrubbed string, the name, and both work addresses mapped to the personal one; the `git filter-repo --replace-text` format) and `mailmap.txt` (both work addresses → `joergbaender <170411984+joergbaender@users.noreply.github.com>`).
+3. Rewrite. `git filter-repo` needs Python (not installed on the PC; `winget install Python.Python.3.12` then `pip install git-filter-repo`). With `P` set to that private folder:
    ```bash
-   # preferred
-   git filter-repo --replace-text ../replacements.txt --replace-message ../replacements.txt --mailmap ../mailmap.txt
-   # fallback without Python (slower, same result for ~60 commits)
-   git filter-branch --env-filter 'case "$GIT_AUTHOR_EMAIL" in 170411984+joergbaender@users.noreply.github.com|170411984+joergbaender@users.noreply.github.com) export GIT_AUTHOR_EMAIL=170411984+joergbaender@users.noreply.github.com;; esac; case "$GIT_COMMITTER_EMAIL" in 170411984+joergbaender@users.noreply.github.com|170411984+joergbaender@users.noreply.github.com) export GIT_COMMITTER_EMAIL=170411984+joergbaender@users.noreply.github.com;; esac' --msg-filter 'sed -e "s/the owner'"'"'s/the owner'"'"'s/g" -e "s/the owner/the owner/g"' --tree-filter 'grep -rl "the owner" --exclude-dir=.git . | xargs -r sed -i -e "s/the owner'"'"'s/the owner'"'"'s/g" -e "s/the owner/the owner/g"' -- --all
+   git filter-repo --replace-text "$P/replacements.txt" --replace-message "$P/replacements.txt" --mailmap "$P/mailmap.txt"
    ```
-4. Verify: `git log --all --format='%an <%ae> %s' | grep -i "jörg\|gk.rocks\|glueckkanja"` prints nothing; `git log -p --all | grep -c "the owner"` is 0; `npm ci && npm test` still passes on the rewritten tree.
+   Fallback without Python (same result for ~70 commits, slower): `git filter-branch --env-filter` mapping the two work addresses to the personal one for author and committer, `--msg-filter` and `--tree-filter` applying `replacements.txt` with `sed` (one `-e "s/<orig>/<repl>/g"` per line; generate the sed script from the file, do not type the strings), over `-- --all`.
+4. Verify: `git log --all --format='%an <%ae> %s' | grep -i "jörg\|gk.rocks\|glueckkanja"` prints nothing; `git log -p --all | grep -c "the owner"` is 0; for three or four lines of `replacements.txt`, `git log -p --all | grep -c "<original>"` is 0; `npm ci && npm test` still passes on the rewritten tree.
 5. Recreate (each command confirmed): `gh repo rename calistally-old --repo joergbaender/calistally --yes`; `gh repo create joergbaender/calistally --public --description "Calisthenics training log as a static PWA over Dropbox"`; in the rewritten clone `git remote set-url origin https://github.com/joergbaender/calistally.git && git push -u origin main`.
 6. Enable Pages with the Actions source: `gh api -X POST repos/joergbaender/calistally/pages -f build_type=workflow` (or Settings → Pages → Source "GitHub Actions"). Re-run the deploy workflow if it ran before Pages existed: `gh workflow run deploy.yml`. Confirm `https://joergbaender.github.io/calistally/` loads the shell.
 7. Delete the old repository once the new one is verified: `gh auth refresh -s delete_repo` (once), then `gh repo delete joergbaender/calistally-old --yes`.
