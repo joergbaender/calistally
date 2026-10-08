@@ -984,7 +984,7 @@ git commit -m "Take the migration's bodyweight from a required --bodyweight opti
 
 ### Task 4: Verify the docs scrub (§10)
 
-**Files:** none to change. The scrub itself (the owner's name → "the owner", the bodyweight figure removed, every dated remark and address-plus-value cell replaced by a synthetic stand-in; option 1 chosen by the owner on 2026-10-08) was applied during planning and is already committed on this branch ("Remove the owner's name, bodyweight and dated sheet cells from the docs"). The replacement table deliberately lives **outside the repository**, in `<private folder>\calistally-private\scrub-docs.mjs` (next to `replacements.txt` and `mailmap.txt` for the history rewrite), because a table of the original strings inside git would undo the scrub. Never copy it into the repo or into this plan.
+**Files:** none to change. The scrub itself (the owner's name → "the owner", the bodyweight figure removed, every dated remark and address-plus-value cell replaced by a synthetic stand-in; option 1 chosen by the owner on 2026-10-08) was applied during planning and is already committed on this branch ("Remove the owner's name, bodyweight and dated sheet cells from the docs"). The replacement table deliberately lives **outside the repository**, in the owner's private folder `calistally-private` (its path is in the project memory and known to the owner; it holds `scrub-docs.mjs`, `replacements.txt` and `mailmap.txt`, the latter two for the history rewrite), because a table of the original strings inside git would undo the scrub. Never copy it into the repo or into this plan, and never write that folder's path into the repo.
 
 - [ ] **Step 1: Verify nothing is left**
 
@@ -992,7 +992,7 @@ git commit -m "Take the migration's bodyweight from a required --bodyweight opti
 grep -rn -i "jörg\|joerg" docs CLAUDE.md src scripts | grep -v "joergbaender"
 grep -rn "BODYWEIGHT_KG" docs src scripts | grep -v "sync-hosting"
 ```
-Expected: both print nothing (`joergbaender` is the GitHub handle in URLs and stays). Then `node "<private folder>\calistally-private\scrub-docs.mjs" .` from the repo root prints `0 replacements` and no "name replaced" line: the table has nothing left to do.
+Expected: both print nothing (`joergbaender` is the GitHub handle in URLs and stays). Then `node <private folder>/scrub-docs.mjs .` from the repo root prints `0 replacements` and no "name replaced" line: the table has nothing left to do.
 
 - [ ] **Step 2: Run the tests**
 
@@ -5023,13 +5023,18 @@ These steps are not for subagents. Each destructive one is confirmed with the ow
    git clone https://github.com/joergbaender/calistally.git calistally-rewrite
    cd calistally-rewrite
    ```
-2. Mapping files, already prepared in `<private folder>\calistally-private\` (never committed): `replacements.txt` (one `original==>replacement` line per scrubbed string, the name, and both work addresses mapped to the personal one; the `git filter-repo --replace-text` format) and `mailmap.txt` (both work addresses → `joergbaender <170411984+joergbaender@users.noreply.github.com>`).
+2. Mapping files, already prepared in the private folder `calistally-private` (path in the project memory; never committed): `replacements.txt` (one `original==>replacement` line per scrubbed string, the name, and both work addresses mapped to the personal one; the `git filter-repo --replace-text` format) and `mailmap.txt` (both work addresses → `joergbaender <170411984+joergbaender@users.noreply.github.com>`).
 3. Rewrite. `git filter-repo` needs Python (not installed on the PC; `winget install Python.Python.3.12` then `pip install git-filter-repo`). With `P` set to that private folder:
    ```bash
    git filter-repo --replace-text "$P/replacements.txt" --replace-message "$P/replacements.txt" --mailmap "$P/mailmap.txt"
    ```
    Fallback without Python (same result for ~70 commits, slower): `git filter-branch --env-filter` mapping the two work addresses to the personal one for author and committer, `--msg-filter` and `--tree-filter` applying `replacements.txt` with `sed` (one `-e "s/<orig>/<repl>/g"` per line; generate the sed script from the file, do not type the strings), over `-- --all`.
-4. Verify: `git log --all --format='%an <%ae> %s' | grep -i "jörg\|gk.rocks\|glueckkanja"` prints nothing; `git log -p --all | grep -c "the owner"` is 0; for three or four lines of `replacements.txt`, `git log -p --all | grep -c "<original>"` is 0; `npm ci && npm test` still passes on the rewritten tree.
+4. Verify: `git log --all --format='%ae' | sort -u` prints only the personal address; the loop below prints `0` for every line of `replacements.txt`; `npm ci && npm test` still passes on the rewritten tree.
+   ```bash
+   git log -p --all > ../all.patch
+   while IFS= read -r line; do o="${line%%==>*}"; echo "$(grep -cF -- "$o" ../all.patch) $(echo "$o" | cut -c1-30)"; done < "$P/replacements.txt"
+   rm ../all.patch
+   ```
 5. Recreate (each command confirmed): `gh repo rename calistally-old --repo joergbaender/calistally --yes`; `gh repo create joergbaender/calistally --public --description "Calisthenics training log as a static PWA over Dropbox"`; in the rewritten clone `git remote set-url origin https://github.com/joergbaender/calistally.git && git push -u origin main`.
 6. Enable Pages with the Actions source: `gh api -X POST repos/joergbaender/calistally/pages -f build_type=workflow` (or Settings → Pages → Source "GitHub Actions"). Re-run the deploy workflow if it ran before Pages existed: `gh workflow run deploy.yml`. Confirm `https://joergbaender.github.io/calistally/` loads the shell.
 7. Delete the old repository once the new one is verified: `gh auth refresh -s delete_repo` (once), then `gh repo delete joergbaender/calistally-old --yes`.
@@ -5043,7 +5048,7 @@ App Console → Create app → Scoped access → App folder → name `CalisTally
 
 1. On the PC, open `https://joergbaender.github.io/calistally/` in Chrome, Connect to Dropbox, authorise. The folder `Dropbox/Apps/CalisTally` appears through the desktop client.
 2. The shell shows "Empty Dropbox folder": choose **"I'll copy files in, then sync"**.
-3. Copy `exercises.json`, `bodyweight.json` and the `sessions/` folder from `<private folder>\migration-out\` into `Dropbox/Apps/CalisTally/`. Not `review.md`, not `report.md`.
+3. Copy `exercises.json`, `bodyweight.json` and the `sessions/` folder from the migration output folder (`migration-out`, outside git; the path is in the project memory) into `Dropbox/Apps/CalisTally/`. Not `review.md`, not `report.md`.
 4. Wait for the desktop client to show everything synced, then tap **Sync now**. Expected: Data shows 147 sessions, the exercise count, 1 bodyweight entry; Issues: none; the seed merge adds nothing (the migration already carried the seed).
 
 ### D. Browser checklist (§14)
