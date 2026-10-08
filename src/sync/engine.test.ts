@@ -359,6 +359,107 @@ describe('Engine pull', () => {
     expect(dropbox.log.filter((l) => l.startsWith('upload'))).toEqual([]);
   });
 
+  it('pushes a set typed while changes were parked once the upgrade works, without calling local content remote', async () => {
+    const dropbox = new FakeDropbox();
+    const s = sessionAt(44);
+    const path = sessionPath(s.session.date, s.session.id);
+    dropbox.put(path, json(s));
+    const h = await harness({}, dropbox);
+    await h.engine.drain();
+    const mine = { ...s, session: { ...s.session, notes: 'phone', updatedAt: '2030-06-01T10:05:00.000Z' } };
+    await h.store.writeFile('session', path, mine);
+    dropbox.put(path, json({ ...s, schemaVersion: 2, extra: true }));
+    await h.engine.drain();
+    const v2Reader = (kind: FileKind, raw: unknown) => {
+      const r = raw as { schemaVersion: number; extra?: boolean };
+      if (r.schemaVersion === 2) { const { extra: _x, ...rest } = r; return readFile(kind, { ...rest, schemaVersion: 1 }); }
+      return readFile(kind, raw);
+    };
+    const common = { store: h.store, client: dropbox, leadership: new FakeLeadership(), seed: SEED, now: () => NOW, readFile: v2Reader };
+    const broken = new Engine({ ...common, buildId: 'build-2', upgradeFile: () => ({ status: 'invalid', message: 'step exploded' }) });
+    await broken.init();
+    await h.store.setMeta('cursor', undefined);
+    await broken.drain();
+    // The owner types a set (newer than the parked records) while the changes are parked.
+    const row = await h.store.getRow(path);
+    const file = row?.content as SessionFile;
+    const b0 = file.session.blocks[0] as SessionFile['session']['blocks'][number];
+    const typed = { ...file, session: { ...file.session, notes: 'typed', updatedAt: '2030-06-01T10:30:00.000Z', blocks: [{ ...b0, sets: [...b0.sets, set({ id: sid(45), order: 3, reps: 2, updatedAt: '2030-06-01T10:30:00.000Z' })] }] } };
+    await h.store.writeFile('session', path, typed);
+    const changesBefore = h.changes.length;
+    await broken.drain();
+    expect(h.changes.length).toBe(changesBefore); // a failing upgrade rewrites nothing and notifies nobody
+    expect(dropbox.log.filter((l) => l.startsWith('upload'))).toEqual([]);
+    const fixed = new Engine({ ...common, buildId: 'build-3' });
+    await fixed.init();
+    await fixed.drain();
+    const stored = JSON.parse(dropbox.get(path)?.text as string) as SessionFile;
+    expect(stored.session.notes).toBe('typed');
+    expect(stored.session.blocks[0]?.sets.map((x) => x.id)).toContain(sid(45));
+    expect(await h.store.queue()).toEqual([]);
+  });
+
+  it('keeps a set typed right after the pull read the row (regression for the non-transactional apply)', async () => {
+    const dropbox = new FakeDropbox();
+    const s = sessionAt(46);
+    const path = sessionPath(s.session.date, s.session.id);
+    dropbox.put(path, json(s));
+    let armed: (() => Promise<void>) | undefined;
+    let downloaded = false;
+    class ArmedStore extends Store {
+      private async keystroke(p: string): Promise<void> {
+        if (p === path && downloaded && armed !== undefined) { const fire = armed; armed = undefined; await fire(); }
+      }
+      // The keystroke lands right after a read of the pulled path (the old apply read, then wrote blindly).
+      override async getRow(p: string) {
+        const row = await super.getRow(p);
+        await this.keystroke(p);
+        return row;
+      }
+      override async getQueueRow(p: string) {
+        const row = await super.getQueueRow(p);
+        await this.keystroke(p);
+        return row;
+      }
+      // The atomic apply reads inside mutate, so there the keystroke lands right after it.
+      override async mutate(p: string, fn: Parameters<Store['mutate']>[1]) {
+        await super.mutate(p, fn);
+        await this.keystroke(p);
+      }
+    }
+    const db = await openDb(new IDBFactory());
+    const store = new ArmedStore(db);
+    const client: DropboxClient = {
+      ...dropbox,
+      listFolder: () => dropbox.listFolder(),
+      listFolderContinue: (c) => dropbox.listFolderContinue(c),
+      getLatestCursor: () => dropbox.getLatestCursor(),
+      downloadZip: (p) => dropbox.downloadZip(p),
+      revokeToken: () => dropbox.revokeToken(),
+      upload: (p, t, m) => dropbox.upload(p, t, m),
+      download: async (p) => { downloaded = true; return dropbox.download(p); },
+    };
+    const engine = new Engine({ store, client, leadership: new FakeLeadership(), buildId: 'build-1', seed: SEED, now: () => NOW });
+    await engine.init();
+    await engine.drain();
+    const theirs = set({ id: sid(47), order: 2, reps: 3, updatedAt: '2030-06-01T10:10:00.000Z' });
+    const b0 = s.session.blocks[0] as SessionFile['session']['blocks'][number];
+    dropbox.put(path, json({ ...s, session: { ...s.session, blocks: [{ ...b0, sets: [...b0.sets, theirs] }] } }));
+    downloaded = false;
+    // Once the file is downloaded, the first read of its row is followed by a keystroke.
+    armed = async () => {
+      const cur = (await Store.prototype.getRow.call(store, path))?.content as SessionFile;
+      const b = cur.session.blocks[0] as SessionFile['session']['blocks'][number];
+      await store.writeFile('session', path, { ...cur, session: { ...cur.session, blocks: [{ ...b, sets: [...b.sets, set({ id: sid(48), order: 4, reps: 1, updatedAt: '2030-06-01T10:20:00.000Z' })] }] } });
+    };
+    await engine.drain();
+    await engine.drain();
+    const ids = (r: unknown) => ((r as SessionFile).session.blocks[0]?.sets ?? []).map((x) => x.id);
+    expect(ids((await store.getRow(path))?.content)).toEqual(expect.arrayContaining([sid(47), sid(48)]));
+    expect(ids(JSON.parse(dropbox.get(path)?.text as string))).toEqual(expect.arrayContaining([sid(47), sid(48)]));
+    expect(await store.queue()).toEqual([]);
+  });
+
   it('never overwrites a quarantined remote and holds the local write', async () => {
     const dropbox = new FakeDropbox();
     const s = sessionAt(15);

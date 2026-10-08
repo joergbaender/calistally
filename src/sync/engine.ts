@@ -296,10 +296,13 @@ export class Engine {
    *  pull: after an app update (or a fix) they become readable without a download, and parked
    *  local changes are released (spec 3 §6). */
   private async rereadNonOk(): Promise<void> {
+    const parked = new Set((await this.store.queue()).filter((q) => q.pendingContent !== undefined).map((q) => q.path));
     for (const row of await this.store.rows()) {
+      if (row.status === 'ok') {
+        if (parked.has(row.path)) await this.releaseParked(row.path, row.kind);
+        continue;
+      }
       if (row.rev === null || typeof row.content !== 'object' || row.content === null) continue;
-      // An ok row is read again only while parked local changes wait on it (their upgrade failed).
-      if (row.status === 'ok' && (await this.store.getQueueRow(row.path))?.pendingContent === undefined) continue;
       await this.applyRaw(row.path, row.kind, row.rev, row.content);
     }
     const rows = await this.store.rows();
@@ -342,6 +345,25 @@ export class Engine {
       const { pendingContent: _p, pendingVersion: _v, lastError: _e, heldBack: _h, ...kept } = base;
       const validation = validateForWrite(kind, merged);
       return { row: next, queue: { ...kept, ...(validation.ok ? {} : { heldBack: validation.issues }) } };
+    });
+  }
+
+  /** Parked local changes on an ok row (their upgrade failed earlier): retry the upgrade. The row's
+   *  content is local, not remote, so it is never compared with Dropbox here and the queue row
+   *  is never deleted: nothing has been pushed. */
+  private async releaseParked(path: string, kind: FileKind): Promise<void> {
+    await this.store.mutate(path, (row, queued) => {
+      if (row === undefined || row.status !== 'ok' || queued?.pendingContent === undefined) return {};
+      const up = this.upgrade(kind, queued.pendingContent);
+      if (up.status !== 'ok') {
+        const lastError = `parked local changes could not be upgraded: ${up.status === 'invalid' ? up.message : `newer than this app (version ${up.version})`}`;
+        return queued.lastError === lastError ? {} : { queue: { ...queued, lastError } };
+      }
+      const merged = this.mergeInto(kind, up.file, row.content);
+      const { pendingContent: _p, pendingVersion: _v, lastError: _e, heldBack: _h, ...kept } = queued;
+      const validation = validateForWrite(kind, merged);
+      const queue: QueueRow = { ...kept, ...(validation.ok ? {} : { heldBack: validation.issues }) };
+      return sameContent(merged, row.content) ? { queue } : { row: { ...row, content: merged, version: row.version + 1 }, queue };
     });
   }
 
