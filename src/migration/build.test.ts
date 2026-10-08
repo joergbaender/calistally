@@ -9,7 +9,7 @@ import { outsideCells, splitRows } from './rows';
 import { gridOf, type CellSpec } from './test-fixtures';
 
 const STAMP = '2030-10-07T00:00:00.000Z';
-const OPTIONS = { year: 2030, stamp: STAMP, bodyweightKg: 73 };
+const OPTIONS = { year: 2030, stamp: STAMP, bodyweightKg: 80 };
 const build = (cells: Record<string, CellSpec>, decisions: Decisions = {}) => buildSessions(splitRows(gridOf(cells)), decisions, SEED, OPTIONS);
 const d = (date: string) => ({ date });
 const seed = (id: string) => SEED.find((e) => e.id === id)!;
@@ -39,7 +39,7 @@ describe('buildSessions: one session per row', () => {
 
   it('emits the seed as catalog and one estimated bodyweight entry at the earliest date', () => {
     expect(r.catalog).toEqual([...SEED]);
-    expect(r.bodyweight).toEqual([{ updatedAt: STAMP, id: uuidV5('bodyweight/initial'), date: '2030-02-01', kg: 73, note: 'estimated, constant 73 kg through 2030 (migration)' }]);
+    expect(r.bodyweight).toEqual([{ updatedAt: STAMP, id: uuidV5('bodyweight/initial'), date: '2030-02-01', kg: 80, note: 'estimated, constant 80 kg through 2030 (migration)' }]);
   });
 });
 
