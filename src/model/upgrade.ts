@@ -37,7 +37,13 @@ export function upgradeFile(
   for (let v = from; v < current; v += 1) {
     const step = steps[kind][v];
     if (step === undefined) return { status: 'invalid', message: `no upgrade step from version ${v} for ${kind}` };
-    file = step(file);
+    try {
+      file = step(file);
+    } catch (e) {
+      // A throwing step must not take the app down: the raw file is quarantined untouched (spec 3 §8).
+      const reason = e instanceof Error ? e.message : String(e);
+      return { status: 'invalid', message: `upgrade step from version ${v} for ${kind} failed: ${reason}` };
+    }
   }
   return { status: 'ok', file: { ...file, schemaVersion: current }, from };
 }
