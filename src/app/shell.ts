@@ -52,13 +52,18 @@ export function renderShell(root: HTMLElement, m: ShellModel, actions: ShellActi
 }
 
 function connectView(m: ShellModel): string {
+  // Local data or a queue means this device was connected before (e.g. the login was revoked):
+  // the owner connects again and keeps both (spec 3 §12).
+  const hasLocal = m.status.queueLength > 0 || m.counts.sessions > 0 || m.counts.exercises > 0 || m.counts.bodyweight > 0;
   return `
     <section>
       <h2>Dropbox</h2>
       ${m.status.queueLength > 0 ? `<p>${m.status.queueLength} local change(s) are waiting for a connection.</p>` : '<p>Not connected.</p>'}
+      ${hasLocal ? '<p>The data on this device is kept. Connect again to resume syncing.</p>' : ''}
       ${m.homeScreenHint ? `<p class="notice">On an iPhone, add this page to your Home Screen first (Share → Add to Home Screen) and open it from there. The login must happen inside the installed app.</p>` : ''}
       ${m.loginError ? `<p class="error">${esc(m.loginError)}</p>` : ''}
-      <button data-action="connect">Connect to Dropbox</button>
+      ${!m.loginError && m.status.lastError ? `<p class="error">Last error: ${esc(m.status.lastError)}</p>` : ''}
+      <button data-action="connect">${hasLocal ? 'Connect again' : 'Connect to Dropbox'}</button>
       <button class="secondary" data-action="paste">Paste a code instead</button>
       ${m.pasteMode ? `<p>A Dropbox page opened with a code. Paste it here:</p><input id="code" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" /><button data-action="submit-code">Finish login</button>` : ''}
     </section>`;
