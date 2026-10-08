@@ -988,11 +988,13 @@ git commit -m "Take the migration's bodyweight from a required --bodyweight opti
 
 - [ ] **Step 1: Verify nothing is left**
 
+With `P` set to the private folder, from the repo root:
+
 ```bash
-grep -rn -i "jörg\|joerg" docs CLAUDE.md src scripts | grep -v "joergbaender"
+while IFS= read -r line; do o="${line%%==>*}"; n=$(grep -rF -- "$o" docs CLAUDE.md src scripts | grep -v "\.test\.ts" | wc -l); [ "$n" -eq 0 ] || echo "$n left: $(echo "$o" | cut -c1-30)"; done < "$P/replacements.txt"
 grep -rn "BODYWEIGHT_KG" docs src scripts | grep -v "sync-hosting"
 ```
-Expected: both print nothing (`joergbaender` is the GitHub handle in URLs and stays). Then `node <private folder>/scrub-docs.mjs .` from the repo root prints `0 replacements` and no "name replaced" line: the table has nothing left to do.
+Expected: both print nothing (the migration tests are excluded by design: they keep their inputs). Then `node "$P/scrub-docs.mjs" .` prints `0 replacements` and no "name replaced" line: the table has nothing left to do.
 
 - [ ] **Step 2: Run the tests**
 
