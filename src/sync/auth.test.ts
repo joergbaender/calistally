@@ -177,13 +177,24 @@ describe('Auth.signOut', () => {
   });
 
   it('leaves no tokens when signOut runs during a pending refresh', async () => {
-    const { auth, db } = await setup([json(200, { access_token: 'at-new', expires_in: 14400 })]);
-    await db.setValue('auth', 'tokens', { refreshToken: 'rt', accessToken: 'at', expiresAt: '2030-05-01T10:04:00.000Z' });
-    const refreshPromise = auth.accessToken();
-    const signOutPromise = auth.signOut();
-    // Both run concurrently; the refresh may succeed but tokens are cleared by signOut
-    await Promise.all([refreshPromise, signOutPromise]);
+    let resolveTokenResponse: (res: Response) => void;
+    const tokenPromise = new Promise<Response>((resolve) => { resolveTokenResponse = resolve; });
+    const { auth, db, calls } = await setup([
+      () => tokenPromise as any,
+      () => new Response('', { status: 200 }),
+    ]);
+    // Store FRESH tokens (well beyond the 5-minute refresh margin)
+    await db.setValue('auth', 'tokens', { refreshToken: 'rt', accessToken: 'at-fresh', expiresAt: '2030-05-01T11:00:00.000Z' });
+    // Start a forced refresh (after a 401); this will await the held response
+    const refreshPromise = auth.refresh();
+    // Meanwhile, signOut revokes with the fresh token (no refresh triggered) and deletes tokens
+    await auth.signOut();
+    expect(calls[0]).toMatchObject({ url: 'https://api.dropboxapi.com/oauth2/token' });
+    expect(calls[1]).toMatchObject({ url: 'https://api.dropboxapi.com/2/auth/token/revoke' });
     expect(await auth.tokens()).toBeUndefined();
+    // Now resolve the held token response; the refresh should fail because tokens are gone
+    resolveTokenResponse!(json(200, { access_token: 'at-new', expires_in: 14400 })());
+    await expect(refreshPromise).rejects.toMatchObject({ code: 'unauthorized', message: 'signed out' });
   });
 
   it('revokes with a fresh access token on sign out with an expired token', async () => {
