@@ -277,21 +277,31 @@ function mapEntry(e: RawEntry): ListingEntry {
   return { kind: 'deleted', path: e.path_lower };
 }
 
-/** The chain of `.tag`s in a 409 body, outermost first: `path/conflict/file` → ['path', 'conflict', 'file']. */
+/** The chain of `.tag`s in a 409 body, outermost first: `path/conflict/file` → ['path', 'conflict', 'file'].
+ *  A union's value sits under its tag (download: `{".tag":"path","path":{".tag":"not_found"}}`); a
+ *  struct such as upload's UploadWriteFailed carries it under `reason`
+ *  (`{".tag":"path","reason":{".tag":"conflict",…}}`). Without a usable `error`, the
+ *  `error_summary` segments (`path/conflict/file/..`) stand in. */
 function errorTags(text: string): string[] {
   const tags: string[] = [];
+  let summary: unknown;
   try {
-    const body = JSON.parse(text) as { error?: unknown };
+    const body = JSON.parse(text) as { error?: unknown; error_summary?: unknown };
+    summary = body.error_summary;
     let node: unknown = body.error;
     while (typeof node === 'object' && node !== null) {
       const record = node as Record<string, unknown>;
       const tag = record['.tag'];
       if (typeof tag !== 'string') break;
       tags.push(tag);
-      node = record[tag];
+      const inner = record[tag];
+      node = typeof inner === 'object' && inner !== null ? inner : record['reason'];
     }
   } catch {
     // not JSON: no tags
+  }
+  if (tags.length === 0 && typeof summary === 'string') {
+    return summary.split('/').filter((s) => s !== '' && !/^\.+$/.test(s));
   }
   return tags;
 }

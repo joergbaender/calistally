@@ -93,10 +93,25 @@ describe('DropboxHttpClient.upload', () => {
     expect(calls[0]).toMatchObject({ url: 'https://content.dropboxapi.com/2/files/upload', headers: { 'Content-Type': 'application/octet-stream' }, body: '{}' });
   });
 
-  it('uses mode add for a new file and maps path/conflict to conflict', async () => {
-    const { client, calls } = harness([json(409, { error: { '.tag': 'path', path: { '.tag': 'conflict', conflict: { '.tag': 'file' } } } })]);
+  it('uses mode add for a new file and maps the real upload conflict body to conflict', async () => {
+    // UploadWriteFailed is a struct: the WriteError sits under `reason`, not under `path`.
+    const { client, calls } = harness([json(409, {
+      error_summary: 'path/conflict/file/..',
+      error: { '.tag': 'path', reason: { '.tag': 'conflict', conflict: { '.tag': 'file' } }, upload_session_id: 'pid_upload_session:ABCD' },
+    })]);
     expect(await client.upload('/a.json', '{}', { add: true })).toMatchObject({ ok: false, error: 'conflict' });
     expect((JSON.parse(calls[0]?.headers['Dropbox-API-Arg'] as string) as { mode: string }).mode).toBe('add');
+  });
+
+  it('also maps a conflict nested under path, or named only in error_summary', async () => {
+    const { client } = harness([
+      json(409, { error: { '.tag': 'path', path: { '.tag': 'conflict', conflict: { '.tag': 'file' } } } }),
+      json(409, { error_summary: 'path/conflict/file/...' }),
+      json(409, { error_summary: 'path/insufficient_space/..', error: { '.tag': 'path', reason: { '.tag': 'insufficient_space' } } }),
+    ]);
+    expect(await client.upload('/a.json', '{}', { rev: 'r1' })).toMatchObject({ ok: false, error: 'conflict' });
+    expect(await client.upload('/a.json', '{}', { rev: 'r1' })).toMatchObject({ ok: false, error: 'conflict' });
+    expect(await client.upload('/a.json', '{}', { rev: 'r1' })).toMatchObject({ ok: false, error: 'other' });
   });
 });
 
