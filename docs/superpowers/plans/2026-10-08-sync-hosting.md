@@ -5060,7 +5060,7 @@ App Console → Create app → Scoped access → App folder → name `CalisTally
 - [ ] iPhone, airplane mode: (spec 4 will write real sets; for now) confirm the shell says "offline" and "retry in … s", then back online recovers without a tap.
 - [ ] Both devices: hand-edit a session note in the PC's `Dropbox/Apps/CalisTally/sessions/...json` (valid JSON; also set that session's `updatedAt` to a newer time, `YYYY-MM-DDTHH:mm:ss.sssZ`, or the tie-break may push the old copy back, spec 3 §11) → the phone shows the change after Sync now; break the JSON on purpose → the phone lists the file as quarantined and the PC's file is untouched; fix it → the issue clears.
 - [ ] Update prompt: merge any small change to `main`, wait for the deploy, return to the installed app → "Update app" appears within the hour or at the next foreground; tapping it reloads to the new build hash.
-- [ ] Paste-the-code: on the PC, "Paste a code instead" → Dropbox shows a code → paste → "Finish login" connects.
+- [ ] Paste-the-code: on the PC, "Paste a code instead" → tap "Open Dropbox to get the code" → Dropbox shows a code → paste → "Finish login" connects.
 
 ### E. Afterwards
 
