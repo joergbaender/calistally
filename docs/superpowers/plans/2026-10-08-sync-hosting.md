@@ -5058,7 +5058,7 @@ App Console → Create app → Scoped access → App folder → name `CalisTally
 - [ ] PC Chrome: login, sync, counts as above; reload keeps the data; "Sign out" with an empty queue clears everything and shows "Not connected".
 - [ ] iPhone: open the URL in Safari, Share → Add to Home Screen, open the installed app; the home-screen hint is gone; Connect → Dropbox opens in the in-app sheet → returns to the app connected; first sync fetches the history (one zip; the log is not visible, but it completes in seconds); footer shows "storage persistent".
 - [ ] iPhone, airplane mode: (spec 4 will write real sets; for now) confirm the shell says "offline" and "retry in … s", then back online recovers without a tap.
-- [ ] Both devices: hand-edit a session note in the PC's `Dropbox/Apps/CalisTally/sessions/...json` (valid JSON) → the phone shows the change after Sync now; break the JSON on purpose → the phone lists the file as quarantined and the PC's file is untouched; fix it → the issue clears.
+- [ ] Both devices: hand-edit a session note in the PC's `Dropbox/Apps/CalisTally/sessions/...json` (valid JSON; also set that session's `updatedAt` to a newer time, `YYYY-MM-DDTHH:mm:ss.sssZ`, or the tie-break may push the old copy back, spec 3 §11) → the phone shows the change after Sync now; break the JSON on purpose → the phone lists the file as quarantined and the PC's file is untouched; fix it → the issue clears.
 - [ ] Update prompt: merge any small change to `main`, wait for the deploy, return to the installed app → "Update app" appears within the hour or at the next foreground; tapping it reloads to the new build hash.
 - [ ] Paste-the-code: on the PC, "Paste a code instead" → Dropbox shows a code → paste → "Finish login" connects.
 
