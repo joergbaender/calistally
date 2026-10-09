@@ -3,7 +3,7 @@ import { tombstone, touch, undelete } from '../model/record';
 import { validateForWrite } from '../model/validate';
 import { block, bodyweight, bodyweightFile, exercise, exercisesFile, ladder, session, sessionFile, set, T0 } from '../model/test-fixtures';
 import type { Block, Session, SessionFile, WorkoutSet } from '../model/types';
-import { canonicalJson, mergeBlock, mergeById, mergeFile, mergeSession, pickWinner, sameContent } from './merge';
+import { canonicalJson, mergeBlock, mergeById, mergeFile, mergeSession, pickWinner, sameContent, sameRecords } from './merge';
 
 const T1 = '2030-01-01T11:00:00.000Z';
 const T2 = '2030-01-01T12:00:00.000Z';
@@ -13,6 +13,34 @@ describe('canonicalJson', () => {
     expect(canonicalJson({ b: 1, a: { d: [3, { z: 1, y: 2 }], c: 2 } })).toBe('{"a":{"c":2,"d":[3,{"y":2,"z":1}]},"b":1}');
     expect(sameContent({ a: 1, b: 2 }, { b: 2, a: 1 })).toBe(true);
     expect(sameContent([1, 2], [2, 1])).toBe(false);
+  });
+});
+
+describe('sameRecords', () => {
+  const ids = ['00000000-0000-4000-8000-00000000000a', '00000000-0000-4000-8000-00000000000b', '00000000-0000-4000-8000-00000000000c'] as const;
+  const s = session([
+    block([set({ id: ids[1], order: 0 }), set({ id: ids[0], order: 1 })], { id: ids[2], order: 0 }),
+    block([], { id: ids[0], order: 1 }),
+  ], { tags: ['push', 'pull'] });
+
+  it('ignores the position of records (objects with an id) at every level', () => {
+    const [b1, b2] = s.blocks as [Block, Block];
+    const reordered: Session = { ...s, blocks: [b2, { ...b1, sets: [...b1.sets].reverse() }] };
+    expect(sameContent(reordered, s)).toBe(false);
+    expect(sameRecords(sessionFile(reordered), sessionFile(s))).toBe(true);
+    expect(sameRecords(exercisesFile([exercise({ id: 'b' }), exercise({ id: 'a' })]), exercisesFile([exercise({ id: 'a' }), exercise({ id: 'b' })]))).toBe(true);
+    expect(sameRecords({ b: 1, a: 2 }, { a: 2, b: 1 })).toBe(true);
+  });
+
+  it('keeps every other array positional, tags included', () => {
+    expect(sameRecords({ ...s, tags: ['pull', 'push'] }, s)).toBe(false);
+    expect(sameRecords([1, 2], [2, 1])).toBe(false);
+  });
+
+  it('still sees a changed field inside a moved record', () => {
+    const [b1, b2] = s.blocks as [Block, Block];
+    expect(sameRecords({ ...s, blocks: [b2, { ...b1, exerciseId: 'dips-bar' }] }, s)).toBe(false);
+    expect(sameRecords({ ...s, blocks: [b2] }, s)).toBe(false);
   });
 });
 
