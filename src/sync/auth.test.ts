@@ -1,6 +1,6 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
-import { Auth, AuthError, codeChallenge, randomString, type Tokens } from './auth';
+import { Auth, AuthError, codeChallenge, PENDING_LOGIN_TTL_MS, randomString, type Tokens } from './auth';
 import { openDb } from './db';
 
 interface Call { url: string; init: RequestInit }
@@ -65,6 +65,25 @@ describe('Auth.startLogin', () => {
     const url = new URL(await auth.startLogin('paste'));
     expect(url.searchParams.has('redirect_uri')).toBe(false);
     expect((await auth.pendingLogin())?.mode).toBe('paste');
+  });
+});
+
+describe('Auth.resumePaste', () => {
+  it('returns the same authorize URL for a stored paste login, until it expires', async () => {
+    const { auth, setClock } = await setup([]);
+    const url = await auth.startLogin('paste');
+    expect(await auth.resumePaste()).toBe(url);
+    setClock(new Date(NOW.getTime() + PENDING_LOGIN_TTL_MS));
+    expect(await auth.resumePaste()).toBe(url);
+    setClock(new Date(NOW.getTime() + PENDING_LOGIN_TTL_MS + 1));
+    expect(await auth.resumePaste()).toBeUndefined();
+  });
+
+  it('returns nothing for a redirect login or no login', async () => {
+    const { auth } = await setup([]);
+    expect(await auth.resumePaste()).toBeUndefined();
+    await auth.startLogin('redirect');
+    expect(await auth.resumePaste()).toBeUndefined();
   });
 });
 

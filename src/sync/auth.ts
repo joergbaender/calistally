@@ -83,6 +83,19 @@ export class Auth {
   async startLogin(mode: 'redirect' | 'paste' = 'redirect'): Promise<string> {
     const pending: PendingLogin = { verifier: this.random(VERIFIER_LENGTH), state: this.random(STATE_LENGTH), mode, createdAt: this.now().toISOString() };
     await this.db.setValue('auth', 'pending-login', pending);
+    return this.authorizeUrl(pending);
+  }
+
+  /** The authorize URL of a stored paste login younger than 10 minutes: the paste panel comes back
+   *  after iOS reloaded the app while the owner copied the code. */
+  async resumePaste(): Promise<string | undefined> {
+    const pending = await this.pendingLogin();
+    if (pending === undefined || pending.mode !== 'paste') return undefined;
+    if (this.now().getTime() - Date.parse(pending.createdAt) > PENDING_LOGIN_TTL_MS) return undefined;
+    return this.authorizeUrl(pending);
+  }
+
+  private async authorizeUrl(pending: PendingLogin): Promise<string> {
     const url = new URL(this.config.authorizeUrl ?? AUTHORIZE_URL);
     url.searchParams.set('client_id', this.config.appKey);
     url.searchParams.set('response_type', 'code');
@@ -90,7 +103,7 @@ export class Auth {
     url.searchParams.set('code_challenge_method', 'S256');
     url.searchParams.set('token_access_type', 'offline');
     url.searchParams.set('state', pending.state);
-    if (mode === 'redirect') url.searchParams.set('redirect_uri', this.config.redirectUri);
+    if (pending.mode === 'redirect') url.searchParams.set('redirect_uri', this.config.redirectUri);
     return url.toString();
   }
 
