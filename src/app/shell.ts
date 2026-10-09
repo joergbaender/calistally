@@ -8,6 +8,8 @@ export interface ShellModel {
   /** iOS outside an installed home-screen app: the login would land in Safari's storage. */
   homeScreenHint: boolean;
   pasteMode: boolean;
+  /** The authorize URL of the paste login, shown as a link; undefined while it is being prepared. */
+  pasteUrl: string | undefined;
   status: SyncStatus;
   counts: { sessions: number; exercises: number; bodyweight: number };
   persisted: boolean | undefined;
@@ -28,14 +30,35 @@ export interface ShellActions {
 const esc = (s: unknown): string => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
 const when = (t: string | undefined): string => (t === undefined ? 'never' : new Date(t).toLocaleString());
 
-export function renderShell(root: HTMLElement, m: ShellModel, actions: ShellActions): void {
-  root.innerHTML = `
+export function shellHtml(m: ShellModel): string {
+  return `
     <h1>CalisTally</h1>
     ${m.updateAvailable ? `<section class="notice"><p>A new version of the app is ready.</p><button data-action="update">Update app</button></section>` : ''}
     ${!m.updateAvailable && m.status.tooNewSeen ? `<section class="notice"><p>A newer version of the app wrote some files. They are shown read-only; update as soon as an update is offered.</p></section>` : ''}
     ${m.connected ? connectedView(m) : connectView(m)}
     <p class="muted">Build ${esc(m.buildId)} · storage ${m.persisted === undefined ? 'unknown' : m.persisted ? 'persistent' : 'not persistent'}</p>
   `;
+}
+
+const rendered = new WeakMap<HTMLElement, string>();
+
+/** Writes the page only when it changed, and carries a half-typed code across the rewrite. */
+export function renderShell(root: HTMLElement, m: ShellModel, actions: ShellActions): void {
+  const html = shellHtml(m);
+  if (rendered.get(root) !== html) {
+    const old = root.querySelector<HTMLInputElement>('#code');
+    const kept = old === null ? undefined : { value: old.value, focused: root.ownerDocument.activeElement === old, start: old.selectionStart, end: old.selectionEnd };
+    root.innerHTML = html;
+    rendered.set(root, html);
+    const input = root.querySelector<HTMLInputElement>('#code');
+    if (input !== null && kept !== undefined) {
+      input.value = kept.value;
+      if (kept.focused) {
+        input.focus();
+        input.setSelectionRange(kept.start, kept.end);
+      }
+    }
+  }
   root.onclick = (event) => {
     const target = (event.target as HTMLElement).closest<HTMLElement>('[data-action]');
     if (target === null) return;
@@ -65,8 +88,17 @@ function connectView(m: ShellModel): string {
       ${!m.loginError && m.status.lastError ? `<p class="error">Last error: ${esc(m.status.lastError)}</p>` : ''}
       <button data-action="connect">${hasLocal ? 'Connect again' : 'Connect to Dropbox'}</button>
       <button class="secondary" data-action="paste">Paste a code instead</button>
-      ${m.pasteMode ? `<p>A Dropbox page opened with a code. Paste it here:</p><input id="code" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" /><button data-action="submit-code">Finish login</button>` : ''}
+      ${m.pasteMode ? pastePanel(m.pasteUrl) : ''}
     </section>`;
+}
+
+/** A real link, not window.open after an await: a tapped link is never popup-blocked (iOS Safari). */
+function pastePanel(url: string | undefined): string {
+  return `
+      ${url === undefined ? '<p>Preparing the Dropbox link…</p>' : `<p>1. <a href="${esc(url)}" target="_blank" rel="noopener">Open Dropbox to get the code</a>, allow access, copy the code.</p>`}
+      <p>2. Paste the code here:</p>
+      <input id="code" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" />
+      <button data-action="submit-code">Finish login</button>`;
 }
 
 function connectedView(m: ShellModel): string {
