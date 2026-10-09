@@ -40,6 +40,7 @@ async function main(): Promise<void> {
     connected: false,
     homeScreenHint: isIos() && !isStandalone(),
     pasteMode: false,
+    pasteUrl: undefined,
     status: engine.status,
     counts: { sessions: 0, exercises: 0, bodyweight: 0 },
     persisted: undefined,
@@ -62,7 +63,15 @@ async function main(): Promise<void> {
     window.history.replaceState(null, '', BASE_URL);
   }
   model.connected = await auth.isConnected();
-  if (!model.connected) engine.disconnect();
+  if (!model.connected) {
+    engine.disconnect();
+    // iOS may reload the installed app while the owner copies the code: bring the panel back.
+    const resumed = await auth.resumePaste();
+    if (resumed !== undefined) {
+      model.pasteMode = true;
+      model.pasteUrl = resumed;
+    }
+  }
 
   try {
     model.persisted = (await navigator.storage?.persisted?.()) ? true : await navigator.storage?.persist?.();
@@ -88,7 +97,7 @@ async function main(): Promise<void> {
     };
     renderShell(root, model, {
       connect: () => { void auth.startLogin('redirect').then((url) => window.location.assign(url)); },
-      startPaste: () => { model.pasteMode = true; scheduleRender(); void auth.startLogin('paste').then((url) => window.open(url, '_blank', 'noopener')); },
+      startPaste: () => { void startPaste(); },
       submitCode: (code) => { void finishPaste(code); },
       syncNow: () => { void engine.drain(); },
       chooseEmptyFolder: (choice) => { void engine.chooseEmptyFolder(choice); },
@@ -97,11 +106,26 @@ async function main(): Promise<void> {
     });
   }
 
+  /** Prepares the paste login and shows its link; the owner taps the link (spec 3 §3 fallback). */
+  async function startPaste(): Promise<void> {
+    model.pasteMode = true;
+    model.pasteUrl = undefined;
+    scheduleRender();
+    try {
+      model.pasteUrl = await auth.startLogin('paste');
+      model.loginError = undefined;
+    } catch {
+      model.loginError = 'could not prepare the login; try again';
+    }
+    scheduleRender();
+  }
+
   async function finishPaste(code: string): Promise<void> {
     try {
       await auth.completeLogin(code);
       model.loginError = undefined;
       model.pasteMode = false;
+      model.pasteUrl = undefined;
       model.connected = true;
       engine.reconnect();
       void engine.drain();
