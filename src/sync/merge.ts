@@ -23,6 +23,32 @@ export function sameContent(a: unknown, b: unknown): boolean {
   return canonicalJson(a) === canonicalJson(b);
 }
 
+/**
+ * Equal content for the sync decisions (spec 3 §6): like sameContent, but a record (an object
+ * with a string `id`) counts in any array position, at every level. Other arrays (`tags`) stay
+ * positional. canonicalJson and sameContent stay positional for the tie-break and the tests.
+ */
+export function sameRecords(a: unknown, b: unknown): boolean {
+  return canonicalJson(sortRecords(a)) === canonicalJson(sortRecords(b));
+}
+
+function sortRecords(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    const items = value.map(sortRecords);
+    return items.length > 0 && items.every(hasId) ? items.sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0)) : items;
+  }
+  if (typeof value === 'object' && value !== null) {
+    const out: Record<string, unknown> = {};
+    for (const [key, v] of Object.entries(value)) out[key] = sortRecords(v);
+    return out;
+  }
+  return value;
+}
+
+function hasId(value: unknown): value is { id: string } {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) && typeof (value as { id?: unknown }).id === 'string';
+}
+
 type Rec = RecordMeta & { id: string };
 
 function ownFields<T extends object>(record: T, childKey?: keyof T): object {

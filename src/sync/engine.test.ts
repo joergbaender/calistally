@@ -2,7 +2,7 @@ import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
 import { readFile } from '../model/read';
 import { tombstone } from '../model/record';
-import { block, exercise, exercisesFile, ladder, session, sessionFile, set } from '../model/test-fixtures';
+import { block, bodyweight, bodyweightFile, exercise, exercisesFile, ladder, session, sessionFile, set } from '../model/test-fixtures';
 import type { Exercise, FileKind, SessionFile } from '../model/types';
 import { LocalChangeChannel } from './channel';
 import { openDb } from './db';
@@ -624,6 +624,95 @@ describe('Engine pull', () => {
     expect(restored).toMatchObject({ archived: true });
     expect(restored?.deletedAt).toBeUndefined();
     expect(dropbox.log.filter((l) => l.startsWith('upload'))).toEqual([`upload ${EXERCISES_PATH} update:rev1`]);
+  });
+});
+
+describe('Engine pull: a merge that only reorders records pushes nothing', () => {
+  const LATER = '2030-06-01T09:00:00.000Z';
+
+  /** Pull `first`, then pull `second` over it (the merge path); returns what the second pull did. */
+  async function pullTwice(path: string, first: unknown, second: unknown) {
+    const dropbox = new FakeDropbox();
+    dropbox.put(path, json(first));
+    const { store, engine } = await harness({}, dropbox);
+    await engine.drain();
+    dropbox.put(path, json(second));
+    dropbox.log.length = 0;
+    await engine.drain();
+    return { store, uploads: dropbox.log.filter((l) => l.startsWith('upload')), queue: await store.queue() };
+  }
+
+  // The later block and the later set carry the smaller ids, as in the migrated files.
+  const s = sessionFile(session([
+    block([set({ id: sid(25), order: 0, reps: 8 }), set({ id: sid(24), order: 1, reps: 6 })], { id: sid(23), order: 0 }),
+    block([set({ id: sid(22), order: 0 })], { id: sid(21), order: 1 }),
+  ], { id: sid(20), date: '2030-05-20' }));
+  const path = sessionPath(s.session.date, s.session.id);
+  const edited: SessionFile = { ...s, session: { ...s.session, notes: 'edited elsewhere', updatedAt: LATER } };
+  const order = (f: SessionFile): string[][] => f.session.blocks.map((b) => [b.id, ...b.sets.map((x) => x.id)]);
+  const idOrder = (f: SessionFile): SessionFile => ({
+    ...f,
+    session: { ...f.session, blocks: [...f.session.blocks].reverse().map((b) => ({ ...b, sets: [...b.sets].reverse() })) },
+  });
+
+  it('session: blocks and sets in training order, not id order', async () => {
+    const { store, uploads, queue } = await pullTwice(path, s, edited);
+    expect((await store.getRow(path))?.content).toMatchObject({ session: { notes: 'edited elsewhere' } });
+    expect(queue).toEqual([]);
+    expect(uploads).toEqual([]);
+  });
+
+  it('keeps the Dropbox copy\'s record order, so a later local edit uploads the file in that order', async () => {
+    const { store } = await pullTwice(path, s, edited);
+    const row = await store.getRow(path);
+    expect(order(row?.content as SessionFile)).toEqual(order(s));
+    const dropbox = new FakeDropbox();
+    dropbox.put(path, json(s));
+    const h = await harness({}, dropbox);
+    await h.engine.drain();
+    dropbox.put(path, json(edited));
+    await h.engine.drain();
+    const local = (await h.store.getRow(path))?.content as SessionFile;
+    await h.store.writeFile('session', path, { ...local, session: { ...local.session, notes: 'typed here', updatedAt: '2030-06-01T10:05:00.000Z' } });
+    await h.engine.drain();
+    const uploaded = JSON.parse(dropbox.get(path)?.text as string) as SessionFile;
+    expect(uploaded.session.notes).toBe('typed here');
+    expect(order(uploaded)).toEqual(order(s));
+  });
+
+  it('does not bump the local version when the remote differs only in record order', async () => {
+    const { store, uploads } = await pullTwice(path, s, idOrder(s));
+    expect((await store.getRow(path))?.version).toBe(1); // set by the first pull, unchanged by the second
+    expect(uploads).toEqual([]);
+  });
+
+  it('duplicate session files that differ only in record order: the winner is not rewritten', async () => {
+    const dropbox = new FakeDropbox();
+    dropbox.put(path, json(s));
+    dropbox.put('/sessions/2030/2030-05-21_00000014.json', json(idOrder(s)));
+    const { engine } = await harness({}, dropbox);
+    await engine.drain();
+    expect(engine.status.issues.map((i) => i.reason)).toEqual(['duplicate']);
+    expect(dropbox.log.filter((l) => l.startsWith('upload'))).toEqual([]);
+  });
+
+  it('exercises.json: entries not in id order', async () => {
+    const [pullUps, dips] = SEED as [Exercise, Exercise]; // pull-ups before dips-bar
+    const edited = exercisesFile([{ ...pullUps, cues: 'edited elsewhere', updatedAt: LATER }, dips]);
+    const { store, uploads, queue } = await pullTwice(EXERCISES_PATH, exercisesFile(SEED), edited);
+    expect((await store.catalog())?.exercises.find((e) => e.id === 'pull-ups')?.cues).toBe('edited elsewhere');
+    expect(queue).toEqual([]);
+    expect(uploads).toEqual([]);
+  });
+
+  it('bodyweight.json: entries not in id order', async () => {
+    const a = bodyweight({ id: sid(31), date: '2030-05-02', kg: 70 });
+    const b = bodyweight({ id: sid(30), date: '2030-05-03', kg: 71 });
+    const edited = bodyweightFile([{ ...a, kg: 70.5, updatedAt: LATER }, b]);
+    const { store, uploads, queue } = await pullTwice('/bodyweight.json', bodyweightFile([a, b]), edited);
+    expect((await store.getRow('/bodyweight.json'))?.content).toMatchObject({ entries: expect.arrayContaining([expect.objectContaining({ id: sid(31), kg: 70.5 })]) });
+    expect(queue).toEqual([]);
+    expect(uploads).toEqual([]);
   });
 });
 

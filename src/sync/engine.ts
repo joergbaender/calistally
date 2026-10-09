@@ -8,7 +8,7 @@ import { validateForWrite } from '../model/validate';
 import type { ChangeChannel } from './channel';
 import type { DropboxClient, DropboxResult, ListingEntry } from './dropbox-client';
 import type { Leadership } from './lock';
-import { mergeFile, sameContent } from './merge';
+import { mergeFile, sameRecords } from './merge';
 import { EXERCISES_PATH, classifyPath } from './paths';
 import type { FileRow, Issue, QueueRow, Store } from './store';
 import { readZip } from './zip';
@@ -339,11 +339,12 @@ export class Engine {
         if (up.status === 'ok') merged = this.mergeInto(kind, up.file, merged);
         else upgradeError = up.status === 'invalid' ? up.message : `newer than this app (version ${up.version})`;
       }
-      const equalsRemote = sameContent(merged, result.file);
-      const equalsLocal = localOk && sameContent(merged, row.content);
+      const equalsRemote = sameRecords(merged, result.file);
+      const equalsLocal = localOk && sameRecords(merged, row.content);
       if (!equalsLocal) localVersion += 1;
       const next: FileRow = {
-        path, kind, rev, content: merged, status: 'ok', issues: [], version: localVersion,
+        // Equal to the remote: keep the remote's record order, so a later edit uploads the file in it.
+        path, kind, rev, content: equalsRemote ? result.file : merged, status: 'ok', issues: [], version: localVersion,
         ...(equalsRemote ? { syncedAt: at } : row?.syncedAt !== undefined ? { syncedAt: row.syncedAt } : {}),
       };
       if (upgradeError !== undefined && queued !== undefined) {
@@ -373,7 +374,7 @@ export class Engine {
       const { pendingContent: _p, pendingVersion: _v, lastError: _e, heldBack: _h, ...kept } = queued;
       const validation = validateForWrite(kind, merged);
       const queue: QueueRow = { ...kept, ...(validation.ok ? {} : { heldBack: validation.issues }) };
-      return sameContent(merged, row.content) ? { queue } : { row: { ...row, content: merged, version: row.version + 1 }, queue };
+      return sameRecords(merged, row.content) ? { queue } : { row: { ...row, content: merged, version: row.version + 1 }, queue };
     });
   }
 
@@ -428,7 +429,7 @@ export class Engine {
       const winner = rows[0] as FileRow;
       let merged: unknown = winner.content;
       for (const loser of rows.slice(1)) merged = this.mergeInto('session', merged, loser.content);
-      if (!sameContent(merged, winner.content)) {
+      if (!sameRecords(merged, winner.content)) {
         const written = await this.store.writeFile('session', winner.path, merged, this.now(), winner.version);
         if (!written.ok) continue; // the winner moved since it was read; the next pull retries
       }
