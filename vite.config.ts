@@ -18,6 +18,8 @@ export default defineConfig(({ command, isPreview }) => ({
   define: { __BUILD_ID__: JSON.stringify(buildId()) },
   server: { port: 5173, strictPort: true },
   preview: { port: 5173, strictPort: true },
+  // Vite 8 compiles TSX with Oxc; name the JSX runtime here as well as in tsconfig (the Vite config wins).
+  oxc: { jsx: { runtime: 'automatic', importSource: 'preact' } },
   build: { target: 'es2022', sourcemap: true },
   plugins: [
     VitePWA({
