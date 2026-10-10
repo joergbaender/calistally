@@ -54,6 +54,12 @@ const heading = () => document.querySelector('main h2')?.textContent;
 describe('App', () => {
   it('renders the screen of the current route and switches with the router', async () => {
     const { router } = await mount();
+    expect(screen.getByRole('button', { name: 'Start session' })).toBeTruthy(); // the Log tab without an open session
+    act(() => { router.navigate({ tab: 'days' }); });
+    expect(document.querySelector('main .days')).toBeTruthy();
+    act(() => { router.navigate({ tab: 'days', sessionId: 'abc' }); });
+    expect(document.querySelector('main h1')?.textContent).toBe('Session'); // the session page's BackBar
+    expect(screen.getByText('This session is not here.')).toBeTruthy();
     act(() => { router.navigate({ tab: 'more' }); });
     expect(heading()).toBe('More');
     act(() => { router.navigate({ tab: 'sync' }); });
