@@ -2,13 +2,14 @@
 
 A calisthenics training tracker built as a static PWA. It reads and writes JSON data files in the owner's Dropbox through the Dropbox API (App folder, OAuth 2 PKCE). There is no backend and no paid infrastructure. It replaces a free-text XLSX log.
 
-**Status:** spec 1 (data model), spec 2 (XLSX migration script) and spec 3 (sync and hosting) implemented as tested TypeScript under `src/model/`, `src/migration/`, `src/sync/` and `src/app/`. The real migration run reached FINAL on 2026-10-07; its output sits outside git and is copied into the Dropbox App folder by hand (spec 3 §11). The app is a diagnostic shell (connect, sync status, issues, update) deployed to GitHub Pages; training views are spec 4.
+**Status:** spec 1 (data model), spec 2 (XLSX migration script) and spec 3 (sync and hosting) implemented as tested TypeScript under `src/model/`, `src/migration/`, `src/sync/` and `src/app/`. The real migration run reached FINAL on 2026-10-07; its output sits outside git and is copied into the Dropbox App folder by hand (spec 3 §11). The app is a diagnostic shell (connect, sync status, issues, update) deployed to GitHub Pages. Spec 4 (the training views) is approved; its implementation plans 4a (the gym build: Log, Days, session page, Sync tab replacing the shell) and 4b (More tab) are written with full code on branch `spec/training-views` and not yet implemented.
 
 ## Read first
 
 - [docs/superpowers/specs/2026-10-06-data-model-design.md](docs/superpowers/specs/2026-10-06-data-model-design.md): **spec 1, the data model.** Source of truth for the entities, validation, versioning, file layout and derived-value rules. Where HANDOVER.md disagrees, the spec wins.
 - [docs/superpowers/specs/2026-10-07-xlsx-migration-design.md](docs/superpowers/specs/2026-10-07-xlsx-migration-design.md): **spec 2, the XLSX migration.** Cell grammar, exercise aliases, date rules, the review list and the decisions file. It also amended the seed catalog (rings, bands).
 - [docs/superpowers/specs/2026-10-07-sync-hosting-design.md](docs/superpowers/specs/2026-10-07-sync-hosting-design.md): **spec 3, sync and hosting.** Dropbox login and client, the IndexedDB store and write queue, the merge, the sync engine, the app update, GitHub Pages, and how the repository went public.
+- [docs/superpowers/specs/2026-10-10-training-views-design.md](docs/superpowers/specs/2026-10-10-training-views-design.md): **spec 4, the training views.** Live log against a whole reference session, day list, session page, More tab, the Sync tab replacing the shell; Preact 10 with signals, view models tested in Node, happy-dom for the few component tests. Plans: [4a](docs/superpowers/plans/2026-10-10-training-views-4a.md) (gym build) and [4b](docs/superpowers/plans/2026-10-10-training-views-4b.md) (More tab), executed in that order.
 - [docs/HANDOVER.md](docs/HANDOVER.md): the original brief. §3 (draft data model) is superseded by spec 1; the rest (goals, XLSX migration notes, open questions) still applies.
 - [docs/tracker-options.md](docs/tracker-options.md): the option analysis behind the chosen architecture, and what's wrong with the XLSX data. (HANDOVER.md calls it `analysis/tracker-options.md`; in this repo it lives in `docs/`.)
 
@@ -60,9 +61,10 @@ Training data, the XLSX (`*.xlsx` is gitignored), the migration's `decisions.jso
 
 ## Stack
 
-Vite + TypeScript PWA (`vite-plugin-pwa`, Workbox precache of the shell only), no UI framework yet (spec 4 decides), no chart library yet. Hosting: GitHub Pages at `https://joergbaender.github.io/calistally/`. Dropbox: App-folder app `CalisTally`, scopes `files.metadata.read`, `files.content.read`, `files.content.write`, redirect URIs `https://joergbaender.github.io/calistally/` and `http://localhost:5173/`. Migration script (spec 2): TypeScript in this repo, calling `validateFile` directly. `schema/*.schema.json` is necessary but not sufficient: the hard rules (real calendar dates and timestamps, unique ids, load rules and so on) are deliberately not in the JSON Schema (D13), so every migrated file must also pass `validateFile`. Timestamps are exactly `YYYY-MM-DDTHH:mm:ss.sssZ` (milliseconds, `Z`); uuids are lowercase.
+Vite + TypeScript PWA (`vite-plugin-pwa`, Workbox precache of the shell only), no UI framework yet: spec 4 chose Preact 10.29 with `@preact/signals` 2 (pinned below 11), TSX through tsconfig and Vite's Oxc, happy-dom and Testing Library for component tests (plan 4a adds them); no chart library (spec 4 U5). Hosting: GitHub Pages at `https://joergbaender.github.io/calistally/`. Dropbox: App-folder app `CalisTally`, scopes `files.metadata.read`, `files.content.read`, `files.content.write`, redirect URIs `https://joergbaender.github.io/calistally/` and `http://localhost:5173/`. Migration script (spec 2): TypeScript in this repo, calling `validateFile` directly. `schema/*.schema.json` is necessary but not sufficient: the hard rules (real calendar dates and timestamps, unique ids, load rules and so on) are deliberately not in the JSON Schema (D13), so every migrated file must also pass `validateFile`. Timestamps are exactly `YYYY-MM-DDTHH:mm:ss.sssZ` (milliseconds, `Z`); uuids are lowercase.
 
 ## To fill in later
 
-- Spec 4: the training views; the UI framework choice; the issues screen replacing the shell.
+- Implement spec 4: plan 4a, then plan 4b (whose last task applies the owner's corrections from using 4a).
+- CSV export: deferred (spec 4 U10); when wanted, a file handed to the device, never a Dropbox write outside the store.
 - Lint/format tooling (none yet).
