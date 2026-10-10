@@ -9,7 +9,7 @@ import { useApp } from '../../context';
 import { sessionRowById, type SessionRow } from '../../data';
 import { lockedSessionRows } from '../../locked';
 import { showToast } from '../../toast';
-import { BackBar, Button, Marks, SetChips, Sheet } from '../shared';
+import { BackBar, Button, Marks, SetChips, Sheet, useBusy } from '../shared';
 import { BlockSheet } from '../log/BlockSheet';
 import { ExerciseSearch } from '../log/ExerciseSearch';
 import { editSession, editSessionQuiet, showHeldBack } from '../log/outcome';
@@ -52,7 +52,7 @@ export function SessionPage(p: { sessionId: string }): JSX.Element {
   const { data, router } = useApp();
   const open = useSignal<Open | undefined>(undefined);
   /** One write at a time for the page's own buttons (tag chips, Undo): a second tap is ignored. */
-  const busy = useSignal(false);
+  const { busy, run: guarded } = useBusy();
   const close = (): void => {
     open.value = undefined;
   };
@@ -81,32 +81,24 @@ export function SessionPage(p: { sessionId: string }): JSX.Element {
   const editable = row !== undefined && !vm.deleted ? row : undefined;
   const setsById = new Map<string, WorkoutSet>(liveBlocks(session).flatMap(liveSets).map((s) => [s.id, s]));
 
-  /** Runs one page write unless one is running; the flag clears when it settles. */
-  const guarded = async (write: () => Promise<unknown>): Promise<void> => {
-    if (busy.value) return;
-    busy.value = true;
-    try {
-      await write();
-    } finally {
-      busy.value = false;
-    }
-  };
-
   const removeTag = (r: SessionRow, tag: string): void => {
     const now = data.clock();
     void guarded(() => editSession(data, r.path, (f) => setSessionFields(f, { tags: f.session.tags.filter((t) => t !== tag) }, now)));
   };
 
   const deleteThis = async (r: SessionRow): Promise<void> => {
+    if (busy.value) return;
     if (!window.confirm('Delete this session? Undo is offered for a few seconds.')) return;
     const now = data.clock();
     const path = r.path;
-    const written = await editSessionQuiet(data, path, (f) => deleteSession(f, now));
-    if (!written.ok) return;
-    router.navigate({ tab: 'days' });
-    showToast('Session deleted', { label: 'Undo', run: () => void editSession(data, path, (f) => undeleteSession(f, data.clock())) }, 6000);
-    // The Undo toast would replace the held-back note; it carries the note instead.
-    if (written.heldBackNote) showHeldBack();
+    await guarded(async () => {
+      const written = await editSessionQuiet(data, path, (f) => deleteSession(f, now));
+      if (!written.ok) return;
+      router.navigate({ tab: 'days' });
+      showToast('Session deleted', { label: 'Undo', run: () => void editSession(data, path, (f) => undeleteSession(f, data.clock())) }, 6000);
+      // The Undo toast would replace the held-back note; it carries the note instead.
+      if (written.heldBackNote) showHeldBack();
+    });
   };
 
   const addBlockTo = async (r: SessionRow, exerciseId: string): Promise<void> => {
@@ -185,7 +177,7 @@ export function SessionPage(p: { sessionId: string }): JSX.Element {
       {editable !== undefined && (
         <div class="session__foot">
           <Button onClick={() => (open.value = { kind: 'search' })}>Add block</Button>
-          <Button kind="danger" onClick={() => void deleteThis(editable)}>Delete session</Button>
+          <Button kind="danger" disabled={busy.value} onClick={() => void deleteThis(editable)}>Delete session</Button>
         </div>
       )}
 
@@ -287,7 +279,7 @@ function NotesSheet(p: { row: SessionRow; onClose(): void }): JSX.Element {
   const opened = useRef(p.row.file.session.notes);
   const draft = useSignal(opened.current ?? '');
   const edited = useSignal(false);
-  const busy = useSignal(false);
+  const { busy, run } = useBusy();
   const save = async (): Promise<void> => {
     if (busy.value) return;
     const text = draft.value;
@@ -295,13 +287,10 @@ function NotesSheet(p: { row: SessionRow; onClose(): void }): JSX.Element {
       p.onClose();
       return;
     }
-    busy.value = true;
-    try {
+    await run(async () => {
       const now = data.clock();
       if (await editSession(data, p.row.path, (f) => setSessionFields(f, { notes: text }, now))) p.onClose();
-    } finally {
-      busy.value = false;
-    }
+    });
   };
   return (
     <Sheet title="Notes" onClose={p.onClose}>
@@ -324,21 +313,18 @@ function NotesSheet(p: { row: SessionRow; onClose(): void }): JSX.Element {
 function TagSheet(p: { row: SessionRow; onClose(): void }): JSX.Element {
   const { data } = useApp();
   const draft = useSignal('');
-  const busy = useSignal(false);
+  const { busy, run } = useBusy();
   const own = new Set(p.row.file.session.tags);
   const seen = [...new Set(data.liveSessions.value.flatMap((s) => s.tags))].filter((t) => !own.has(t)).sort((a, b) => a.localeCompare(b));
   const add = async (raw: string): Promise<void> => {
     if (busy.value) return;
     const tag = raw.trim();
     if (tag === '') return;
-    busy.value = true;
-    try {
+    await run(async () => {
       const now = data.clock();
       const ok = await editSession(data, p.row.path, (f) => (f.session.tags.includes(tag) ? f : setSessionFields(f, { tags: [...f.session.tags, tag] }, now)));
       if (ok) p.onClose();
-    } finally {
-      busy.value = false;
-    }
+    });
   };
   return (
     <Sheet title="Add tag" onClose={p.onClose}>

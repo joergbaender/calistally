@@ -5,7 +5,7 @@ import { deleteBlock, findBlock, moveBlock, setBlockNote, undeleteBlock } from '
 import { useApp } from '../../context';
 import type { SessionRow } from '../../data';
 import { showToast } from '../../toast';
-import { Button, Sheet } from '../shared';
+import { Button, Sheet, useBusy } from '../shared';
 import { clearDraft, currentBlockId } from './log-state';
 import { editSession, editSessionQuiet, showHeldBack } from './outcome';
 
@@ -24,19 +24,9 @@ export function BlockSheet(p: { row: SessionRow; blockId: string; name: string; 
   // The note as the sheet opened with it: a note another device wrote meanwhile is never written
   // back over when the owner did not change it here.
   const openedNote = useRef(block?.note ?? '');
-  const busy = useSignal(false);
-
   /** One write at a time: a second tap while the first is pending would move the
    *  block twice, write the note twice or re-stamp the tombstone. */
-  const guarded = async (write: () => Promise<void>): Promise<void> => {
-    if (busy.value) return;
-    busy.value = true;
-    try {
-      await write();
-    } finally {
-      busy.value = false;
-    }
-  };
+  const { busy, run: guarded } = useBusy();
 
   const move = (direction: 'up' | 'down'): Promise<void> =>
     guarded(async () => {

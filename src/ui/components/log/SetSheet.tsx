@@ -8,7 +8,7 @@ import { useApp } from '../../context';
 import type { SessionRow } from '../../data';
 import { formatAmount, formatLoad } from '../../format';
 import { showToast } from '../../toast';
-import { Button, NumberPad, Sheet, Stepper } from '../shared';
+import { Button, NumberPad, Sheet, Stepper, useBusy } from '../shared';
 import { LoadSheet, type Load } from './LoadSheet';
 import { editSession, editSessionQuiet, showHeldBack } from './outcome';
 
@@ -80,7 +80,6 @@ function SetForm(p: SetSheetProps & { target: Target }): JSX.Element {
   const note = useSignal(opened.current.note);
   const sub = useSignal<'load' | 'pad' | undefined>(undefined);
   const saveAfterLoad = useSignal(false);
-  const busy = useSignal(false);
 
   const closeSub = (): void => {
     sub.value = undefined;
@@ -89,15 +88,7 @@ function SetForm(p: SetSheetProps & { target: Target }): JSX.Element {
 
   /** One write at a time: a second tap while a write is pending does nothing (it would write twice,
    *  since Data.edit replays on the fresh row). */
-  const guarded = async (write: () => Promise<void>): Promise<void> => {
-    if (busy.value) return;
-    busy.value = true;
-    try {
-      await write();
-    } finally {
-      busy.value = false;
-    }
-  };
+  const { busy, run: guarded } = useBusy();
 
   const saveEdit = (current: WorkoutSet, value: number): Promise<void> => guarded(async () => {
     const l = load.value;
