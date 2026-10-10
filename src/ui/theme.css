@@ -1,0 +1,42 @@
+/* Spec 4 §8: the one token block. A re-theme edits this block only; components reference tokens. */
+:root {
+  color-scheme: dark;
+  --bg: #111827;
+  --panel: #1f2937;
+  --panel-2: #273449;
+  --text: #e5e7eb;
+  --muted: #9ca3af;
+  --accent: #f59e0b;
+  --ok: #34d399;
+  --danger: #f87171;
+  --outline: #374151;
+  --on-accent: #111111;
+}
+
+/* ---- base ---- */
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.35 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  overscroll-behavior: none;
+}
+/* The status bar is translucent (black-translucent): this strip covers its area, so scrolled
+   content (the Log cards) never shows under the clock and battery. Above the bars, below sheets. */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  inset-inline: 0;
+  z-index: 15;
+  height: env(safe-area-inset-top, 0px);
+  background: var(--bg);
+  pointer-events: none;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { touch-action: manipulation; cursor: pointer; }
+input, select, textarea { font-size: 16px; } /* iOS: no zoom on focus below 16 px */
+/* Read by screen readers, not shown. */
+.visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }

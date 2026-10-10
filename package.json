@@ -15,12 +15,16 @@
     "make-icons": "tsx scripts/make-icons.ts"
   },
   "dependencies": {
-    "@sinclair/typebox": "^0.34.52"
+    "@preact/signals": "^2.11.3",
+    "@sinclair/typebox": "^0.34.52",
+    "preact": "^10.29.8"
   },
   "devDependencies": {
+    "@testing-library/preact": "^3.2.4",
     "@types/node": "^26.6.4",
     "exceljs": "^4.4.0",
     "fake-indexeddb": "^6.2.5",
+    "happy-dom": "^20.14.6",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.3",
