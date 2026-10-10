@@ -42,7 +42,7 @@ Spec 4 is done when:
 
 ### Layout
 
-`src/app/main.ts` keeps building `Db`, `Store`, `Auth`, `DropboxHttpClient`, `Engine`, the service-worker update and the triggers exactly as today (spec 3 §12, §13), handles the OAuth redirect before anything renders, then mounts one Preact `<App>` into `#app`. `src/app/shell.ts`, `shell.css` and `shell.test.ts` are deleted; `config.ts`, `sw-update.ts` and `triggers.ts` stay.
+`src/app/main.tsx` (amended 2026-10-10, plan 4a: renamed from `main.ts` because it mounts JSX) keeps building `Db`, `Store`, `Auth`, `DropboxHttpClient`, `Engine`, the service-worker update and the triggers exactly as today (spec 3 §12, §13), handles the OAuth redirect before anything renders, then mounts one Preact `<App>` into `#app`. `src/app/shell.ts`, `shell.css` and `shell.test.ts` are deleted; `config.ts`, `sw-update.ts` and `triggers.ts` stay.
 
 New code lives in `src/ui/`:
 
@@ -70,13 +70,15 @@ Pure edit functions over files live in `src/model/edit.ts`, next to `record.ts`,
 interface SessionRow { path: string; file: SessionFile; version: number }
 interface Data {
   sessions: Signal<SessionRow[]>;          // status ok, not duplicateOf (store.sessions() plus version)
-  catalog: Signal<ExercisesFile | undefined>;
-  bodyweight: Signal<BodyweightFile | undefined>;
+  catalog: Signal<FileSlice<ExercisesFile> | undefined>;     // FileSlice<F> = { file: F; version: number } (amended 2026-10-10, plan 4a)
+  bodyweight: Signal<FileSlice<BodyweightFile> | undefined>; // same: the slice carries the row version
   refusedRows: Signal<FileRow[]>;          // read-only, needs-update, quarantined, duplicateOf: listed read-only except duplicates (§5)
   status: Signal<SyncStatus>;              // engine.subscribe
   issues: Signal<Issue[]>;                 // store.issues(), refreshed with status and on change
   now: Signal<Date>;                       // ticks every second while the Log or Sync tab is visible (counter, retry countdown), else every minute (amended 2026-10-10, plan 4a)
-  write(kind, path, file, expectedVersion): Promise<WriteOutcome>;
+  edit(kind, path, fn: (fresh) => next): Promise<WriteOutcome>;  // amended 2026-10-10, plan 4a: replaces write(kind, path, file, expectedVersion)
+  create(kind, path, file): Promise<WriteOutcome>;                // a new file (mode add)
+  clock(): Date;                                                  // the injected "now"; screens take timestamps from here
 }
 ```
 
@@ -101,7 +103,7 @@ deleteSet(file, setId, now) / undeleteSet(file, setId, now)
 
 `addSet` normalises `added`/`assist` with 0 kg to `bodyweight` (spec 1 §3) and refuses `reps <= 0` (D18). Catalog edits use `createExercise`, `touch` and `tombstone` from `catalog.ts` and `record.ts`; bodyweight edits are the same three-liners over `entries`.
 
-Then the screen calls `data.write(kind, path, file, expectedVersion)`, which is `store.writeFile` with the row `version` the screen read:
+Then the screen calls `data.edit(kind, path, fn)` for an existing file, where `fn` is the edit as a function of the fresh file (which is what makes the replay below possible), or `data.create(kind, path, file)` for a new one (amended 2026-10-10, plan 4a; this replaces `data.write(kind, path, file, expectedVersion)`). Both end in `store.writeFile` with the row `version` they read:
 
 - `ok` → done; `ok` with `heldBack` → the toast "Saved here, not uploaded (app bug)" once per path, the Sync badge counts it.
 - `changed` (the row moved under the screen, e.g. a pull merged the file) → the screen's edit is **replayed once** on the fresh row, because every edit is a function of the file; a second `changed` shows "Changed elsewhere, try again" and the screen re-reads.
@@ -355,19 +357,19 @@ Nothing in the UI waits for Dropbox.
 
 Runtime dependencies added: `preact` (10.x) and `@preact/signals`. Dev dependencies added: `happy-dom`, `@testing-library/preact`. Nothing else; no router, no CSS framework, no chart library, no date library.
 
-Config: `tsconfig.json` gets `"jsx": "react-jsx"`, `"jsxImportSource": "preact"`; `vitest.config.ts` keeps the Node environment as default, component test files opt in with `// @vitest-environment happy-dom`; `vite.config.ts` is unchanged except that `shell.css` is replaced by `theme.css` in `index.html`.
+Config: `tsconfig.json` gets `"jsx": "react-jsx"`, `"jsxImportSource": "preact"`; `vitest.config.ts` keeps the Node environment as default, component test files opt in with `// @vitest-environment happy-dom`; `vite.config.ts` also gets `oxc: { jsx: { runtime: 'automatic', importSource: 'preact' } }`, because Vite 8 compiles with Oxc (amended 2026-10-10, plan 4a); otherwise it is unchanged except that `shell.css` is replaced by `theme.css` in `index.html`.
 
 | File | Responsibility |
 |---|---|
 | `src/model/edit.ts` | The pure edit functions of §3 |
 | `src/model/derive/live.ts` | Day type, reference proposal, card pairing, stepper proposal, sticky load, counter source |
-| `src/ui/data.ts` | Signals over store and engine; `write` with replay; soft issues |
+| `src/ui/data.ts` | Signals over store and engine; `edit`/`create` with replay; soft issues |
 | `src/ui/router.ts` | Hash routing |
 | `src/ui/theme.css` | Tokens and base styles |
 | `src/ui/app.tsx` | Tab bar, route switch, toast host |
 | `src/ui/components/**` | The screens of §4–§7, each with its `*.vm.ts` |
 | `src/ui/format.ts` | Display formatting |
-| `src/app/main.ts` | Bootstrap (unchanged logic) and mount |
+| `src/app/main.tsx` | Bootstrap (unchanged logic) and mount (amended 2026-10-10, plan 4a) |
 
 ## 11. Testing
 
@@ -376,7 +378,7 @@ Tests come first and run in Node unless marked. Fixtures are synthetic, dates in
 - **`edit.ts`:** every function; `updatedAt` moves on the edited record only (a set edit leaves block and session alone, a block move leaves the session alone); tombstone and undelete round-trip; `addBlock`/`addSet` use `nextOrder`; `moveBlock` uses the midpoint and renumbers nothing; `addSet` from the session page carries no `completedAt`; `setSetFields` never touches `completedAt`; `added`/`assist` at 0 kg becomes `bodyweight`; `reps <= 0` refused; every result passes `validateForWrite`.
 - **`derive/live.ts`:** day type with ties and empty sessions; the proposal with a push/pull/legs rotation, with one day type only, with no sessions; card pairing with two runs, with a new exercise, with No reference; the stepper proposal (reference position, fall back to the previous set, empty), steps for reps and seconds, the floor at 1; sticky load (block, reference, default, the 0 kg `added` case that opens the sheet); the counter source.
 - **View models:** Days rows (chips, `?`, span, open marker, raw exercise ids), session page (interval labels, `restSec`, aggregate and note-only shapes, refused rows read-only), exercise history rows (run numbering, load text), calendar months (dots, hollow, counts, streak over a year boundary), bodyweight line points (min and max labels, fewer than two entries), Sync cards (every reason, the soft issues), the badge.
-- **`data.ts`** against a `Store` on fake-indexeddb: signals update on `onChange` and on channel messages; `write` passes `expectedVersion`; replay on `changed` once and surfacing on the second; `heldBack` surfaces once per path.
+- **`data.ts`** against a `Store` on fake-indexeddb: signals update on `onChange` and on channel messages; `edit` writes against the row version it read (amended 2026-10-10, plan 4a); replay on `changed` once and surfacing on the second; `heldBack` surfaces once per path.
 - **Router:** every route, unknown hash, the start route rules.
 - **Theme:** no literal colour outside `theme.css`.
 - **Components** (happy-dom, `@testing-library/preact`): Add set writes a set with `completedAt`, the sticky load and the next proposal shown; tapping a chip then Delete writes a tombstone and Undo writes the undelete; inline create writes the catalog before the session; Start session writes the file and stores the reference; the Sync tab renders every issue reason and the Update button states; the session page's Add set writes no `completedAt`.
