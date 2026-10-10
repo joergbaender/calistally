@@ -139,6 +139,18 @@ describe('SetSheet (edit, from a today chip)', () => {
     expect((await fileAt(store, pathOf(today))).session.blocks[0]?.sets[1]).toMatchObject({ reps: 13, note: 'strict' });
   });
 
+  it("the set sheet's pad has exactly one Cancel and it returns to the set sheet", async () => {
+    const today = openToday();
+    await mountLog(today);
+    fireEvent.click(chip('9'));
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Set' })).getByRole('button', { name: 'Edit value' }));
+    const pad = screen.getByRole('dialog', { name: 'Amount' });
+    expect(within(pad).getAllByRole('button', { name: 'Cancel' })).toHaveLength(1);
+    fireEvent.click(within(pad).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog', { name: 'Amount' })).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Set' })).toBeTruthy();
+  });
+
   it("the set sheet's pad reads Use and only sets the value", async () => {
     const today = openToday();
     const { store } = await mountLog(today);

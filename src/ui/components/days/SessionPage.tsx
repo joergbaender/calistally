@@ -167,6 +167,7 @@ export function SessionPage(p: { sessionId: string }): JSX.Element {
           block={b}
           setsById={setsById}
           editable={editable !== undefined}
+          provisional={data.openSession.value?.file.session.id === session.id}
           onName={() => router.navigate({ tab: 'more', page: 'exercise', id: b.exerciseId })}
           onOptions={() => (open.value = { kind: 'block', blockId: b.blockId, name: b.name, up: b.canMoveUp, down: b.canMoveDown })}
           onTapSet={(setId) => (open.value = { kind: 'set', setId })}
@@ -198,6 +199,8 @@ function BlockView(p: {
   block: BlockRow;
   setsById: ReadonlyMap<string, WorkoutSet>;
   editable: boolean;
+  /** The open session's marks are dimmed until it closes (spec 4 §4, §14). */
+  provisional: boolean;
   onName(): void;
   onOptions(): void;
   onTapSet(setId: string): void;
@@ -229,9 +232,9 @@ function BlockView(p: {
       )}
       <div class="session-block__totals">
         {!b.noteOnly && <span>{b.totals}</span>}
-        <Marks amount={b.marks.amount} load={b.marks.load} />
+        <Marks amount={b.marks.amount} load={b.marks.load} provisional={p.provisional} />
         <span class="session-block__exmark">
-          exercise <Marks amount={b.exerciseMark} />
+          exercise <Marks amount={b.exerciseMark} provisional={p.provisional} />
         </span>
       </div>
       {p.editable && (

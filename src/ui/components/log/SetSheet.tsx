@@ -170,7 +170,7 @@ function SetForm(p: SetSheetProps & { target: Target }): JSX.Element {
   }
   if (sub.value === 'pad') {
     return (
-      <Sheet title="Amount" onClose={closeSub}>
+      <Sheet title="Amount" cancel={false} onClose={closeSub}>
         <NumberPad
           value={amount.value}
           submitLabel="Use"

@@ -131,7 +131,7 @@ export function EntryArea(p: { row: SessionRow; current: CurrentVm }): JSX.Eleme
         />
       )}
       {sheet.value === 'pad' && (
-        <Sheet title="Amount" onClose={closeSheet}>
+        <Sheet title="Amount" cancel={false} onClose={closeSheet}>
           <NumberPad
             value={value}
             submitLabel="Add"

@@ -19,6 +19,14 @@ describe('Sheet', () => {
     expect(onClose).toHaveBeenCalledTimes(2);
   });
 
+  it('cancel={false} renders no footer Cancel; Escape still closes', () => {
+    const onClose = vi.fn();
+    render(<Sheet title="Amount" cancel={false} onClose={onClose}><p>body</p></Sheet>);
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('a swipe down of more than 80 px on the title bar closes it; a shorter or upward swipe does not', () => {
     const onClose = vi.fn();
     render(<Sheet title="Load" onClose={onClose}><p>body</p></Sheet>);

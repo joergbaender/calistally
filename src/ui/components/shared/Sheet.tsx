@@ -8,9 +8,10 @@ export const SWIPE_CLOSE_PX = 80;
 /**
  * Spec 4 §8: a bottom sheet with a title, the content and a Cancel button. It slides up (theme.css),
  * closes on a swipe down on its title bar, on Cancel and on Escape (the dialog takes focus on mount).
+ * `cancel={false}` omits the footer Cancel for content that has its own (a NumberPad).
  * A tap on the backdrop does nothing: a stray tap must never discard a half-entered load or note.
  */
-export function Sheet(p: { title: string; onClose(): void; children: ComponentChildren }): JSX.Element {
+export function Sheet(p: { title: string; onClose(): void; cancel?: boolean; children: ComponentChildren }): JSX.Element {
   const dialog = useRef<HTMLDivElement>(null);
   const swipeFrom = useRef<number | undefined>(undefined);
   useEffect(() => {
@@ -47,9 +48,11 @@ export function Sheet(p: { title: string; onClose(): void; children: ComponentCh
           <h2 class="sheet__title">{p.title}</h2>
         </div>
         <div class="sheet__body">{p.children}</div>
-        <div class="sheet__foot">
-          <Button kind="secondary" onClick={p.onClose}>Cancel</Button>
-        </div>
+        {p.cancel !== false && (
+          <div class="sheet__foot">
+            <Button kind="secondary" onClick={p.onClose}>Cancel</Button>
+          </div>
+        )}
       </div>
     </div>
   );
