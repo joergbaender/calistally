@@ -410,3 +410,95 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .log-card__totals { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
 .log-card__counter { margin-left: auto; color: var(--accent); font-weight: 600; }
 .log-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 4px 0 12px; }
+
+/* ---- .entry (components/log/EntryArea) ---- */
+/* Pinned above the tab bar (56 px + safe area); the spacer keeps the last card scrollable above it,
+   and the toast moves above it while it shows. */
+.entry {
+  position: fixed;
+  inset-inline: 0;
+  bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  z-index: 5;
+  background: var(--panel);
+  border-top: 1px solid var(--outline);
+}
+.entry__inner { display: flex; flex-direction: column; gap: 8px; max-width: 40rem; margin: 0 auto; padding: 8px 16px; }
+.entry__inner > .btn { width: 100%; }
+.entry__top { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+/* At 375 px a long name ('Diamond Push-ups', 'Australian Pull-ups') next to the load and note
+   buttons leaves about 150 px: only the name truncates, the set number always shows. */
+.entry__what { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 0.3em; white-space: nowrap; }
+.entry__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.entry__set { flex: none; }
+.entry__load, .entry__note {
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.entry__load::after { content: ' ▾'; color: var(--muted); }
+.entry__note { color: var(--muted); }
+.entry__note.is-set { border-color: var(--accent); color: var(--accent); }
+.entry-spacer { height: 190px; }
+body:has(.entry) .toast { bottom: calc(56px + 190px + env(safe-area-inset-bottom, 0px)); }
+
+/* ---- .loadsheet, .notesheet (components/log/LoadSheet, NoteSheet) ---- */
+.loadsheet__types { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.loadsheet__type {
+  min-height: 44px;
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--text);
+}
+.loadsheet__type.is-active { border-color: var(--accent); color: var(--accent); }
+.loadsheet__caption { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; }
+.notesheet__input, .setsheet__note, .blocksheet__note, .exsearch__input, .exform__field input, .exform__field select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* ---- .setsheet, .blocksheet (components/log/SetSheet, BlockSheet) ---- */
+.setsheet__row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.setsheet__label { color: var(--muted); }
+.setsheet__load {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+}
+.setsheet__load::after { content: ' ▾'; color: var(--muted); }
+.setsheet__actions { display: flex; justify-content: space-between; gap: 8px; }
+.setsheet__actions .btn--primary { margin-left: auto; }
+.setsheet__gone, .blocksheet__gone { margin: 0; color: var(--muted); }
+
+/* ---- .exsearch, .exform (components/log/ExerciseSearch) ---- */
+.exsearch__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.exsearch__family { padding: 8px 0 2px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+.exsearch__entry {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--text);
+  text-align: left;
+}
+.exsearch__archived summary { min-height: 44px; display: flex; align-items: center; color: var(--muted); cursor: pointer; }
+.exsearch__archived .exsearch__entry { color: var(--muted); }
+.exsearch__create { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.exsearch__reason { color: var(--muted); font-size: 14px; }
+.exform__field { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 14px; }
+.exform__check { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+.exform__check input { width: 22px; height: 22px; accent-color: var(--accent); }
