@@ -137,6 +137,31 @@ describe('EntryArea', () => {
     await waitFor(() => expect(entry().textContent).toContain('set 3'));
   });
 
+  it('the Amount pad sheet has exactly one Cancel and it closes the sheet without a write', async () => {
+    const today = openToday([block(ladder([8], { completedAt: '2030-03-07T10:10:00.000Z' }), { exerciseId: 'push-ups' })]);
+    const { store } = await mount([today], { [`reference:${today.id}`]: 'none' });
+    await waitFor(() => expect(value()).toBe('8'));
+    fireEvent.click(within(entry()).getByRole('button', { name: 'Edit value' }));
+    const pad = screen.getByRole('dialog', { name: 'Amount' });
+    expect(within(pad).getAllByRole('button', { name: 'Cancel' })).toHaveLength(1);
+    fireEvent.click(within(pad).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog', { name: 'Amount' })).toBeNull();
+    expect((await fileAt(store, pathOf(today))).session.blocks[0]?.sets).toHaveLength(1);
+  });
+
+  it('the Load sheet shows one Cancel for a weighted type and one for bodyweight', async () => {
+    const today = openToday([block([], { exerciseId: 'weighted-pull-ups' })]);
+    await mount([today], { [`reference:${today.id}`]: 'none' });
+    await waitFor(() => expect(value()).toBe('–'));
+    fireEvent.click(within(entry()).getByRole('button', { name: 'Increase' }));
+    fireEvent.click(within(entry()).getByRole('button', { name: 'Add set · 1' }));
+    const sheet = await screen.findByRole('dialog', { name: 'Load' });
+    fireEvent.click(within(sheet).getByRole('button', { name: 'external' }));
+    expect(within(sheet).getAllByRole('button', { name: 'Cancel' })).toHaveLength(1);
+    fireEvent.click(within(sheet).getByRole('button', { name: 'bodyweight' }));
+    expect(within(sheet).getAllByRole('button', { name: 'Cancel' })).toHaveLength(1);
+  });
+
   it("the pad's Add follows the load-sheet-first rule when a weight is required", async () => {
     const today = openToday([block([], { exerciseId: 'weighted-pull-ups' })]);
     const { store } = await mount([today], { [`reference:${today.id}`]: 'none' });

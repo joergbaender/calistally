@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, fireEvent, screen, waitFor, within } from '@testing-library/preact';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/preact';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setSessionFields } from '../../../model/edit';
 import { block, exercise, ladder, session, set, sessionFile, T0 } from '../../../model/test-fixtures';
@@ -230,6 +230,27 @@ describe('SessionPage', () => {
     await waitFor(async () => expect((await fileAt(m.store, pathOf(s))).session.tags).toEqual(['gym']));
     expect(navigate).not.toHaveBeenCalled();
     expect(m.deps.router.route.value).toEqual({ tab: 'days', sessionId: s.id });
+  });
+
+  it('the open session renders its marks provisional (dimmed); a closed session does not', async () => {
+    const openS = session([block(ladder([8], { completedAt: '2030-03-09T11:40:00.000Z' }), { exerciseId: 'pull-ups' })], {
+      date: '2030-03-09',
+      startedAt: '2030-03-09T11:30:00.000Z',
+    });
+    const closedS = threeBlocks();
+    const m = await setup({ now: NOW, sessions: [openS, closedS], exercises: [PULL, DIPS, ROWS] });
+    expect(m.data.openSession.value?.file.session.id).toBe(openS.id);
+    renderIn(m.deps, <SessionPage sessionId={openS.id} />);
+    await waitFor(() => expect(article('Pull-ups')).toBeTruthy());
+    const openMarks = article('Pull-ups').querySelectorAll('.marks');
+    expect(openMarks.length).toBe(2);
+    openMarks.forEach((el) => expect(el.classList.contains('is-provisional')).toBe(true));
+    cleanup();
+    renderIn(m.deps, <SessionPage sessionId={closedS.id} />);
+    await waitFor(() => expect(article('Pull-ups')).toBeTruthy());
+    const closedMarks = article('Pull-ups').querySelectorAll('.marks');
+    expect(closedMarks.length).toBe(2);
+    closedMarks.forEach((el) => expect(el.classList.contains('is-provisional')).toBe(false));
   });
 
   it('a session just created on this device shows as loading, not missing, until its row arrives', async () => {

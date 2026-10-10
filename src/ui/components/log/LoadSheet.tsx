@@ -14,7 +14,7 @@ export interface Load {
 export function LoadSheet(p: { load: Load; onSave(load: Load): void; onClose(): void }): JSX.Element {
   const type = useSignal<LoadType>(p.load.loadType);
   return (
-    <Sheet title="Load" onClose={p.onClose}>
+    <Sheet title="Load" cancel={type.value === 'bodyweight'} onClose={p.onClose}>
       <div class="loadsheet__types" role="group" aria-label="Load type">
         {LOAD_TYPES.map((t) => (
           <button
