@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 900" width="1280" height="900" role="img" aria-labelledby="t d">
+  <title id="t">CalisTally system overview</title>
+  <desc id="d">The browser app reads and writes only its local IndexedDB copy through the Store. One sync engine, guarded by a Web Lock, pulls from and pushes to a Dropbox App folder through the Dropbox client. Screens never call Dropbox. The static build is served by GitHub Pages; the one-off XLSX migration is copied into the Dropbox folder by hand.</desc>
+  <style>
+    svg {
+      --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --line: #6e7781;
+      --band: #eef2f6; --box: #ffffff; --ext: #ddf4ff; --accent: #0969da;
+    }
+    @media (prefers-color-scheme: dark) {
+      svg {
+        --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --line: #8b949e;
+        --band: #161b22; --box: #1f2630; --ext: #12294a; --accent: #58a6ff;
+      }
+    }
+    text { font: 13px system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: var(--fg); }
+    .title { font-size: 22px; font-weight: 700; }
+    .h { font-size: 15px; font-weight: 600; }
+    .b { font-weight: 600; }
+    .m { fill: var(--muted); font-size: 12px; }
+    .lbl { fill: var(--muted); font-size: 12px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+    .bg { fill: var(--bg); }
+    .band { fill: var(--band); }
+    .box { fill: var(--box); stroke: var(--line); stroke-width: 1.2; }
+    .cont { fill: none; stroke: var(--line); stroke-width: 1.5; }
+    .ext { fill: var(--ext); }
+    .gate { stroke: var(--accent); stroke-width: 2.4; }
+    .dash { stroke-dasharray: 7 5; }
+    .ln { stroke: var(--line); stroke-width: 1.6; fill: none; }
+    .lna { stroke: var(--accent); stroke-width: 2.2; fill: none; }
+    .ah { fill: var(--line); }
+    .aha { fill: var(--accent); }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="ah"/></marker>
+    <marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="aha"/></marker>
+  </defs>
+
+  <rect class="bg" width="1280" height="900"/>
+
+  <!-- Title -->
+  <text class="title" x="40" y="38">CalisTally · system overview</text>
+  <text class="m" x="40" y="62">Static PWA, no backend. Screens never call Dropbox: every read and write goes through the Store (blue).</text>
+
+  <!-- Browser container -->
+  <rect class="cont" x="40" y="90" width="880" height="794" rx="10"/>
+  <text x="60" y="114"><tspan class="h">Browser tab</tspan><tspan class="m">  ·  installed PWA on the iPhone, or a PC browser; same static build</tspan></text>
+
+  <!-- UI band -->
+  <rect class="band" x="56" y="124" width="848" height="152" rx="8"/>
+  <text class="b" x="72" y="144">UI · src/ui · Preact 10 + signals</text>
+  <rect class="box" x="72" y="156" width="186" height="52" rx="6"/>
+  <text class="b" x="86" y="177">Log</text><text class="m" x="86" y="195">live set-by-set logging</text>
+  <rect class="box" x="282" y="156" width="186" height="52" rx="6"/>
+  <text class="b" x="296" y="177">Days</text><text class="m" x="296" y="195">list + session page</text>
+  <rect class="box" x="492" y="156" width="186" height="52" rx="6"/>
+  <text class="b" x="506" y="177">More</text><text class="m" x="506" y="195">placeholder, plan 4b</text>
+  <rect class="box" x="702" y="156" width="186" height="52" rx="6"/>
+  <text class="b" x="716" y="177">Sync</text><text class="m" x="716" y="195">status, login, update</text>
+  <rect class="box" x="72" y="222" width="816" height="44" rx="6"/>
+  <text x="86" y="249">components + *.vm.ts view models (pure, tested in Node) · router.ts hash routes · theme.css tokens</text>
+
+  <!-- UI <-> Data -->
+  <line class="ln" x1="300" y1="276" x2="300" y2="314" marker-end="url(#a)"/>
+  <text class="lbl" x="310" y="300">edit(fn)</text>
+  <line class="ln" x1="700" y1="314" x2="700" y2="276" marker-end="url(#a)"/>
+  <text class="lbl" x="710" y="300">signals</text>
+
+  <!-- Data -->
+  <rect class="box" x="72" y="314" width="816" height="60" rx="6"/>
+  <text class="b" x="86" y="336">Data · ui/data.ts</text>
+  <text x="86" y="356">signals: sessions, catalog, bodyweight, status, issues · edit() replays once if the file moved</text>
+
+  <!-- Sync band -->
+  <rect class="band" x="56" y="392" width="848" height="316" rx="8"/>
+  <text class="b" x="72" y="412">Sync · src/sync</text>
+
+  <!-- Data <-> Store (after the band so it paints on top) -->
+  <line class="lna" x1="250" y1="374" x2="250" y2="424" marker-end="url(#aa)"/>
+  <text class="lbl" x="260" y="404">writeFile(file)</text>
+  <line class="lna" x1="350" y1="424" x2="350" y2="374" marker-end="url(#aa)"/>
+  <text class="lbl" x="360" y="404">reads · onChange</text>
+
+  <rect class="box gate" x="72" y="424" width="300" height="96" rx="6"/>
+  <text class="b" x="86" y="446">Store · store.ts</text>
+  <text x="86" y="466">writeFile: status guard →</text>
+  <text x="86" y="484">validateForWrite → save + queue</text>
+  <text class="m" x="86" y="502">invalid: kept local, held back</text>
+
+  <rect class="box" x="462" y="424" width="426" height="96" rx="6"/>
+  <text class="b" x="476" y="446">Engine · engine.ts</text>
+  <text x="476" y="466">drain = pull, then push; catalog first</text>
+  <text x="476" y="484">triggers: start, visible, online, every 5 min</text>
+  <text class="m" x="476" y="502">merge.ts per record · zip.ts first load · backoff</text>
+
+  <line class="ln" x1="372" y1="462" x2="462" y2="462" marker-end="url(#a)"/>
+  <text class="lbl" x="417" y="455" text-anchor="middle">nudge</text>
+  <line class="ln" x1="462" y1="494" x2="372" y2="494" marker-end="url(#a)"/>
+  <text class="lbl" x="417" y="487" text-anchor="middle">rows</text>
+
+  <rect class="box" x="72" y="548" width="300" height="80" rx="6"/>
+  <text class="b" x="86" y="570">IndexedDB · calistally</text>
+  <text x="86" y="590">files · queue · auth · meta</text>
+  <text class="m" x="86" y="608">the only local copy; views read from here</text>
+  <line class="lna" x1="222" y1="520" x2="222" y2="548" marker-start="url(#aa)" marker-end="url(#aa)"/>
+  <text class="lbl" x="232" y="539">rows + queue</text>
+
+  <rect class="box" x="462" y="548" width="180" height="80" rx="6"/>
+  <text class="b" x="476" y="570">Auth · auth.ts</text>
+  <text x="476" y="590">PKCE login + refresh</text>
+  <text class="m" x="476" y="608">tokens in IndexedDB</text>
+
+  <rect class="box" x="700" y="548" width="188" height="80" rx="6"/>
+  <text class="b" x="714" y="570">Dropbox client</text>
+  <text x="714" y="590">7 calls over fetch</text>
+  <text class="m" x="714" y="608">rev · strict_conflict</text>
+
+  <line class="ln" x1="794" y1="520" x2="794" y2="548" marker-end="url(#a)"/>
+  <text class="lbl" x="784" y="539" text-anchor="end">list · download · upload</text>
+  <line class="ln" x1="642" y1="588" x2="700" y2="588" marker-end="url(#a)"/>
+  <text class="lbl" x="671" y="580" text-anchor="middle">token</text>
+
+  <rect class="box" x="72" y="648" width="300" height="48" rx="6"/>
+  <text class="b" x="86" y="668">channel.ts · BroadcastChannel</text>
+  <text class="m" x="86" y="686">tells other tabs which paths changed</text>
+  <rect class="box" x="462" y="648" width="426" height="48" rx="6"/>
+  <text class="b" x="476" y="668">lock.ts · Web Lock calistally-sync</text>
+  <text class="m" x="476" y="686">only the holder runs the engine</text>
+
+  <!-- Model band -->
+  <rect class="band" x="56" y="722" width="848" height="70" rx="8"/>
+  <text class="b" x="72" y="744">Model · src/model · pure functions, no I/O</text>
+  <text class="m" x="888" y="744" text-anchor="end">imported by ui, sync and the migration script</text>
+  <text x="72" y="772">schema (TypeBox) · validate · read + upgrade · edit.ts · derive/* · catalog + seed</text>
+
+  <!-- App shell band -->
+  <rect class="band" x="56" y="806" width="848" height="66" rx="8"/>
+  <rect class="box" x="72" y="814" width="400" height="48" rx="6"/>
+  <text class="b" x="86" y="834">main.tsx · src/app</text>
+  <text class="m" x="86" y="852">wires store, auth, client, engine, data; mounts App</text>
+  <rect class="box" x="488" y="814" width="400" height="48" rx="6"/>
+  <text class="b" x="502" y="834">Service worker (Workbox)</text>
+  <text class="m" x="502" y="852">shell only, never Dropbox · update on tap</text>
+
+  <!-- Migration (right column, top) -->
+  <rect class="box dash" x="1000" y="90" width="240" height="130" rx="10"/>
+  <text class="h" x="1016" y="116">PC, one-off</text>
+  <text x="1016" y="142">XLSX log → migration CLI</text>
+  <text x="1016" y="162">src/migration, Node</text>
+  <text class="m" x="1016" y="184">JSON files + review list</text>
+  <text class="m" x="1016" y="202">kept outside git</text>
+  <line class="ln dash" x1="1120" y1="220" x2="1120" y2="290" marker-end="url(#a)"/>
+  <text class="lbl" x="1130" y="250">copied by hand,</text>
+  <text class="lbl" x="1130" y="266">desktop client</text>
+
+  <!-- Dropbox -->
+  <rect class="cont ext" x="1000" y="290" width="240" height="370" rx="10"/>
+  <text class="h" x="1016" y="316">Dropbox</text>
+  <rect class="box" x="1016" y="332" width="208" height="140" rx="6"/>
+  <text class="mono b" x="1030" y="354">Apps/CalisTally/</text>
+  <text class="mono" x="1030" y="378">exercises.json</text>
+  <text class="mono" x="1030" y="398">bodyweight.json</text>
+  <text class="mono" x="1030" y="418">sessions/&lt;yyyy&gt;/</text>
+  <text class="mono" x="1030" y="438">&lt;date&gt;_&lt;id8&gt;.json</text>
+  <text class="m" x="1030" y="458">one file per training session</text>
+  <text class="m" x="1016" y="498">conflicts merge per record,</text>
+  <text class="m" x="1016" y="516">never "conflicted copy" files</text>
+  <rect class="box" x="1016" y="548" width="208" height="80" rx="6"/>
+  <text class="b" x="1030" y="570">Dropbox API</text>
+  <text class="mono" x="1030" y="590">api.dropboxapi.com</text>
+  <text class="mono" x="1030" y="608">content.dropboxapi.com</text>
+
+  <line class="ln" x1="888" y1="588" x2="1000" y2="588" marker-start="url(#a)" marker-end="url(#a)"/>
+  <text class="lbl" x="944" y="580" text-anchor="middle">HTTPS</text>
+
+  <!-- GitHub -->
+  <rect class="cont" x="1000" y="700" width="240" height="184" rx="10"/>
+  <text class="h" x="1016" y="724">GitHub</text>
+  <rect class="box" x="1016" y="736" width="208" height="48" rx="6"/>
+  <text class="b" x="1030" y="756">Actions on push to main</text>
+  <text class="m" x="1030" y="774">test · typecheck · build</text>
+  <rect class="box" x="1016" y="814" width="208" height="48" rx="6"/>
+  <text class="b" x="1030" y="834">Pages</text>
+  <text class="m" x="1030" y="852">serves the static shell</text>
+  <line class="ln" x1="1120" y1="784" x2="1120" y2="814" marker-end="url(#a)"/>
+  <text class="lbl" x="1130" y="804">deploy</text>
+  <line class="ln" x1="1016" y1="838" x2="888" y2="838" marker-end="url(#a)"/>
+  <text class="lbl" x="952" y="830" text-anchor="middle">app shell</text>
+</svg>
