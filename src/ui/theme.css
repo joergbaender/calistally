@@ -502,3 +502,67 @@ body:has(.entry) .toast { bottom: calc(56px + 190px + env(safe-area-inset-bottom
 .exform__field { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 14px; }
 .exform__check { display: flex; align-items: center; gap: 10px; min-height: 44px; }
 .exform__check input { width: 22px; height: 22px; accent-color: var(--accent); }
+
+/* ---- .days, .days-row, .past-session (components/days: list and Add past session) ---- */
+.days { display: flex; flex-direction: column; gap: 12px; padding-top: 12px; }
+.days__chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.days__chip {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--outline);
+  border-radius: 22px;
+  background: var(--panel);
+  color: var(--muted);
+  font-weight: 600;
+}
+.days__chip.is-active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.days__add { display: flex; }
+.days__empty { margin: 8px 0; color: var(--muted); }
+.days__group { display: flex; flex-direction: column; }
+/* Sticky under the top of the scrolling area; the background hides the rows passing below. */
+.days__month {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 8px 0 6px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.days__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.days-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--panel);
+  text-align: left;
+}
+.days-row.is-open { border-color: var(--ok); }
+.days-row.is-locked { background: var(--panel-2); }
+.days-row__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.days-row__day { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.days-row__uncertain { color: var(--accent); }
+.days-row__label { color: var(--muted); }
+.days-row__open { color: var(--ok); font-weight: 600; }
+.days-row__span { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+.days-row__lock { display: inline-flex; align-self: center; color: var(--muted); }
+.days-row__exercises { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 14px; }
+.days-row__exercise { white-space: nowrap; }
+.past-session__field { display: flex; flex-direction: column; gap: 6px; }
+.past-session__label { color: var(--muted); font-size: 14px; }
+.past-session__date {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  background: var(--panel-2);
+}
