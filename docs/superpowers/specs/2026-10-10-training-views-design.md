@@ -244,7 +244,7 @@ Sun 28 Feb?  —      Squats –  Split Squats ↑
 - Live sessions show the span from `startedAt` (else the earliest `completedAt`) to the latest `completedAt`, when both exist and differ; migrated sessions show nothing.
 - An open session carries the word **open** and tapping it goes to the Log tab; any other row opens the session page.
 
-Sessions on refused rows (`read-only`, `needs-update`, `quarantined`, duplicate; `data.refusedRows`) whose content still parses as a session are listed with a lock mark and open read-only; a quarantined file that does not parse is only on the Sync tab.
+Sessions on refused rows (`read-only`, `needs-update`, `quarantined`; `data.refusedRows`) whose content still parses as a session are listed with a lock mark and open read-only; a quarantined file that does not parse is only on the Sync tab. A refused row whose session id is already held by a readable row is not listed: the readable row is the one shown. **Duplicate files** (`duplicateOf`) are never listed: spec 3 §6 hides them from views, the engine has merged their content into the first path, and they appear on the Sync tab only (amended 2026-10-10 while writing plan 4a: a duplicate shares its twin's session id, so its row would have opened the editable twin).
 
 ### Session page (`#/days/<sessionId>`)
 
@@ -255,7 +255,8 @@ For closed sessions, app-made and migrated alike.
 - **Edits:** tap a set → the set sheet (value, load, note, Delete); **Add set** adds one **without** `completedAt` (D16), `order = nextOrder`; **Add block** opens the exercise search of §4; a block's sheet has note, Move up, Move down (`moveBlock` uses `orderBetween` with the neighbours, nothing else is renumbered), Delete. Every delete gets the Undo toast.
 - **Delete session** at the bottom, behind a confirm: `deleteSession` tombstones the session only (no cascade, spec 1 §3), the file stays, the row leaves the Days list; Undo via the toast.
 - **Migrated shapes:** an `aggregate` set shows "100 total, set count unknown" and cannot be edited except for its note or deleted; a note-only block shows "no sets recorded"; `dateUncertain` shows the `?` with "date estimated by the migration"; the date sheet of such a session has a **date is exact** switch, and saving with it on drops `dateUncertain` (saving with it off keeps the flag even if the date changed).
-- **Refused rows** show the content read-only with a banner naming the reason (newer app, quarantined, duplicate) and a link to the Sync tab. No edit control is rendered.
+- **Refused rows** show the content read-only with a banner naming the reason (newer app, quarantined) and a link to the Sync tab. No edit control is rendered.
+- **An open session** reached by a link (`#/days/<id>` while `isSessionOpen` holds) redirects to the Log tab, as its Days row does; the session page is for closed sessions.
 
 ### New past session
 
