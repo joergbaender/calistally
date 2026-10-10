@@ -122,6 +122,21 @@ describe('SessionPage', () => {
     await waitFor(async () => expect((await fileAt(store, pathOf(s))).session.deletedAt).toBeUndefined());
   });
 
+  it('Delete session ignores a second tap while the first write runs: one tombstone write', async () => {
+    const s = threeBlocks();
+    const { store, deps } = await mount(s);
+    await waitFor(() => expect(article('Pull-ups')).toBeTruthy());
+    const asked = answerConfirm(true);
+    const writes = vi.spyOn(store, 'writeFile');
+    const del = screen.getByRole('button', { name: 'Delete session' });
+    fireEvent.click(del);
+    fireEvent.click(del);
+    await waitFor(async () => expect((await fileAt(store, pathOf(s))).session.deletedAt).toBe(NOW.toISOString()));
+    await waitFor(() => expect(deps.router.route.value).toEqual({ tab: 'days' }));
+    expect(asked).toHaveBeenCalledTimes(1);
+    expect(writes).toHaveBeenCalledTimes(1);
+  });
+
   it('a cancelled confirm deletes nothing', async () => {
     const s = threeBlocks();
     const { store } = await mount(s);

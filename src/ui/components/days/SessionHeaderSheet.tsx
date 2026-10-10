@@ -8,7 +8,7 @@ import { useApp } from '../../context';
 import type { SessionRow } from '../../data';
 import { formatLabel } from '../../format';
 import { showToast } from '../../toast';
-import { Button, Sheet } from '../shared';
+import { Button, Sheet, useBusy } from '../shared';
 import { editSessionQuiet, HELD_BACK_TEXT, showHeldBack } from '../log/outcome';
 import { notesChanged } from './session-page.vm';
 
@@ -38,7 +38,7 @@ export function SessionHeaderSheet(p: { row: SessionRow; onClose(): void }): JSX
   const notes = useSignal(s.notes ?? '');
   /** Notes go into the write only when the owner typed in them (a migrated note keeps its whitespace). */
   const notesEdited = useSignal(false);
-  const busy = useSignal(false);
+  const { busy, run } = useBusy();
 
   const save = async (): Promise<void> => {
     if (busy.value) return;
@@ -61,8 +61,7 @@ export function SessionHeaderSheet(p: { row: SessionRow; onClose(): void }): JSX
       p.onClose();
       return;
     }
-    busy.value = true;
-    try {
+    await run(async () => {
       const now = data.clock();
       const written = await editSessionQuiet(data, path, (f) => setSessionFields(f, fields, now));
       if (!written.ok) return;
@@ -73,9 +72,7 @@ export function SessionHeaderSheet(p: { row: SessionRow; onClose(): void }): JSX
       } else if (written.heldBackNote) {
         showToast(HELD_BACK_TEXT);
       }
-    } finally {
-      busy.value = false;
-    }
+    });
   };
 
   return (
