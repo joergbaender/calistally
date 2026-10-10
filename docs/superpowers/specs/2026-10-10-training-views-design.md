@@ -218,7 +218,7 @@ A delete writes the tombstone at once and shows a toast for 6 s: "Set 14 deleted
 
 ### Header and the rest
 
-Date and start time; **vs <reference> ▾** reopens the picker to change the reference (the choice is updated in `meta`); **Start new** (the confirm above); "offline" when `status.online` is false. **Done** navigates to the Days tab; nothing is written (U7). The **counter** shows mm:ss (h:mm:ss above an hour) since the latest `completedAt` of a live set in the session and is hidden before the first set; it reads the `now` signal and stores nothing.
+Date and start time; **vs <reference> ▾** reopens the picker to change the reference (the choice is updated in `meta`); **Details** opens the session page (§5); **Start new** (the confirm above); "offline" when `status.online` is false. **Done** navigates to the Days tab; nothing is written (U7). The **counter** shows mm:ss (h:mm:ss above an hour) since the latest `completedAt` of a live set in the session and is hidden before the first set; it reads the `now` signal and stores nothing.
 
 ### Rules
 
@@ -248,7 +248,7 @@ Sessions on refused rows (`read-only`, `needs-update`, `quarantined`; `data.refu
 
 ### Session page (`#/days/<sessionId>`)
 
-For closed sessions, app-made and migrated alike.
+For every session, app-made and migrated alike, open or closed.
 
 - **Header:** date (editable; the file keeps its name, spec 1 D12, and the page says so once when the date changes), label (editable, one of the five or none), tags (remove with a tap; add from the tags seen in all sessions plus free text), notes (editable multi-line text; migrated sessions hold the raw sheet row, spec 2 §7). Each edit calls `setSessionFields` and touches only the session.
 - **Blocks** in canonical order. Each shows the exercise name (tap → exercise history), the block note (editable), the sets as chips with the load shown where it differs from the block's first set, the totals, both block indicators (`blockIndicator`) and the per-exercise indicator. Between timestamped sets the **set interval** of spec 1 §7 is shown as "+1:02" (labelled as an interval in the help text, not as rest); a set with `restSec` shows it as "rest 120 s".
@@ -256,7 +256,7 @@ For closed sessions, app-made and migrated alike.
 - **Delete session** at the bottom, behind a confirm: `deleteSession` tombstones the session only (no cascade, spec 1 §3), the file stays, the row leaves the Days list; Undo via the toast.
 - **Migrated shapes:** an `aggregate` set shows "100 total, set count unknown" and cannot be edited except for its note or deleted; a note-only block shows "no sets recorded"; `dateUncertain` shows the `?` with "date estimated by the migration"; the date sheet of such a session has a **date is exact** switch, and saving with it on drops `dateUncertain` (saving with it off keeps the flag even if the date changed).
 - **Refused rows** show the content read-only with a banner naming the reason (newer app, quarantined) and a link to the Sync tab. No edit control is rendered.
-- **An open session** reached by a link (`#/days/<id>` while `isSessionOpen` holds) redirects to the Log tab, as its Days row does; the session page is for closed sessions.
+- **An open session** has a session page too (amended 2026-10-10 while writing plan 4a): the Log tab has no notes, tags, label, date or delete, and the session stays open for up to 3 h after Done. The page works exactly as for a closed session (sets added there carry no `completedAt`); the Log header's **Details** button opens it. The open session's Days row still goes to the Log tab.
 
 ### New past session
 
