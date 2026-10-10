@@ -566,3 +566,93 @@ body:has(.entry) .toast { bottom: calc(56px + 190px + env(safe-area-inset-bottom
   border-radius: 10px;
   background: var(--panel-2);
 }
+
+/* ---- .session, .session-head, .session-block, .session-set (components/days/SessionPage) ---- */
+.session { display: flex; flex-direction: column; gap: 10px; padding-bottom: 12px; }
+.session__missing { color: var(--muted); }
+.session__banner { padding: 10px 12px; border: 1px solid var(--danger); border-radius: 10px; color: var(--text); background: var(--panel); }
+.session__banner a { color: var(--accent); }
+/* At least 44 px tall (spec 4 §8 touch targets). */
+.session__banner-link { display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; }
+.session__deleted { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-radius: 10px; background: var(--panel); color: var(--danger); font-weight: 600; }
+.session__foot { display: flex; justify-content: space-between; gap: 8px; padding-top: 8px; }
+.session-head { display: flex; flex-direction: column; gap: 6px; }
+.session-head__uncertain { margin: 0; color: var(--muted); font-size: 14px; }
+.session-head__line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.session-head__label { padding: 4px 10px; border-radius: 999px; background: var(--panel-2); color: var(--accent); font-size: 14px; text-transform: capitalize; }
+.session-head__tag {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--outline);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+}
+span.session-head__tag { display: inline-flex; align-items: center; min-height: 32px; }
+.session-head__tag--add { border-style: dashed; color: var(--muted); }
+.session-head__notes {
+  margin: 0;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 15px;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.session-head__placeholder { color: var(--muted); }
+.session-block { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 12px; background: var(--panel); }
+.session-block__head { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.session-block__name { margin: 0; flex: 1; font-size: 17px; }
+.session-block__namebtn {
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: inherit;
+  font-weight: inherit;
+  text-align: left;
+}
+.session-block__flag { margin-left: 8px; color: var(--muted); font-size: 12px; font-weight: 400; text-transform: uppercase; }
+.session-block__load { color: var(--muted); font-variant-numeric: tabular-nums; }
+.session-block__options {
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font-size: 18px;
+}
+.session-block__note { margin: 0; color: var(--muted); font-style: italic; overflow-wrap: anywhere; }
+.session-block__empty { margin: 0; color: var(--muted); }
+.session-block__sets { display: flex; flex-wrap: wrap; gap: 8px; }
+.session-block__totals { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.session-block__exmark { display: inline-flex; align-items: center; gap: 4px; }
+.session-block__actions { display: flex; justify-content: flex-end; }
+.session-set { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.session-set__meta, .session-set__note { max-width: 120px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; text-align: center; overflow-wrap: anywhere; }
+.session-set__note { font-style: italic; }
+
+/* ---- .sessionsheet, .tagsheet, .setsheet__aggregate (components/days/SessionHeaderSheet, SessionPage sheets; log/SetSheet) ---- */
+.sessionsheet__field { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 14px; }
+.sessionsheet__field input, .sessionsheet__field select, .sessionsheet__field textarea, .sessionsheet__notes, .tagsheet__input {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 16px; /* no zoom on focus (spec 4 §10 notes) */
+  font-family: inherit;
+}
+.sessionsheet__switch { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+.sessionsheet__switch input { width: 22px; height: 22px; accent-color: var(--accent); }
+.tagsheet__seen { display: flex; flex-wrap: wrap; gap: 6px; }
+.setsheet__aggregate { margin: 0; color: var(--muted); }
