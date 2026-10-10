@@ -1,7 +1,7 @@
 # Spec 4: Training views
 
 - **Date:** 2026-10-10
-- **Status:** awaiting the owner's approval (design agreed section by section on 2026-10-10; the owner's decisions are recorded in §2)
+- **Status:** approved by the owner on 2026-10-10 (design agreed section by section; the owner's decisions are recorded in §2). Amended on 2026-10-10 while plans 4a and 4b were written and reviewed; each amendment is marked in place.
 - **Scope:** every screen of the app: the live log, the day list and session page, per-exercise history, calendar, bodyweight log, catalog screen, and the Sync tab that replaces the diagnostic shell of spec 3 §12. It also fixes the UI framework, the test approach for views, navigation and the session lifecycle. This spec covers **no overload calculations** (v1.1), **no CSV export** (deferred, §13) and **no model change**: every file keeps the shape of spec 1 at `MODEL_VERSION` 1.
 
 Builds on [spec 1](2026-10-06-data-model-design.md) (entities, record rules, derived values; its rules win over anything here), [spec 2](2026-10-07-xlsx-migration-design.md) (the migrated shapes the views must show: `dateUncertain`, `aggregate`, note-only blocks, `restSec`, raw-row `notes`) and [spec 3](2026-10-07-sync-hosting-design.md) (the store as the only door to data, the write guard, `heldBack`, the engine status, the prompted update). Where HANDOVER.md §4 disagrees with this spec, this spec wins; HANDOVER's analytics-first feature list is not the usage model (spec 1 §1).
@@ -75,7 +75,7 @@ interface Data {
   refusedRows: Signal<FileRow[]>;          // read-only, needs-update, quarantined, duplicateOf: listed read-only except duplicates (§5)
   status: Signal<SyncStatus>;              // engine.subscribe
   issues: Signal<Issue[]>;                 // store.issues(), refreshed with status and on change
-  now: Signal<Date>;                       // ticks every second while the Log or Sync tab is visible (counter, retry countdown), else every minute (amended 2026-10-10, plan 4a review)
+  now: Signal<Date>;                       // ticks every second while the Log or Sync tab is visible (counter, retry countdown), else every minute (amended 2026-10-10, plan 4a)
   write(kind, path, file, expectedVersion): Promise<WriteOutcome>;
 }
 ```
@@ -125,7 +125,7 @@ By URL hash, one `computed` over `location.hash`, no router dependency:
 | `#/more/calendar`, `#/more/bodyweight`, `#/more/catalog`, `#/more/catalog/<id>` | The other More screens |
 | `#/sync` | Sync tab |
 
-An unknown hash goes to `#/log`. On start: the OAuth redirect (query string on the base URL) is handled before mount as today and then routes to `#/sync`; otherwise `#/log` while a session is open (§4 Resume: a reload or an app update lands back on it; amended 2026-10-10, plan 4a review); otherwise `meta.lastRoute`, else `#/log`; with no local data and no connection, `#/sync`. Deep pages show a back control that goes to their tab's root; the browser back button works through the hash history.
+An unknown hash goes to `#/log`. On start: the OAuth redirect (query string on the base URL) is handled before mount as today and then routes to `#/sync`; otherwise `#/log` while a session is open (§4 Resume: a reload or an app update lands back on it; amended 2026-10-10, plan 4a); otherwise `meta.lastRoute`, else `#/log`; with no local data and no connection, `#/sync`. Deep pages show a back control that goes to their tab's root; the browser back button works through the hash history.
 
 ### Offline and not connected
 
@@ -203,7 +203,7 @@ A card's exercise name opens a small sheet: block note (editable), "Make current
 Pinned above the tab bar, within the safe-area inset, shown only while a current block exists.
 
 - The top row: exercise name and "set *n*" (*n* = today's live sets in the block + 1); the **load button** showing the sticky load ("bodyweight", "+11.5 kg", "−10 kg assist", "35 kg", "band 50"); **note** (a set note, rare).
-- **Stepper.** The value is the proposed next: last time's set at position *n* (`amountOf` of the paired block's *n*-th live set), else today's previous set in this block, else empty. − and + step by 1 for `reps`, by 5 for `seconds`; the value never drops below 1. Tapping the number opens the **number pad** (digits, `.`, backspace, Add) for decimals (16.5) and jumps (30). The pad opens empty with the current value as a placeholder, so the first key starts a fresh number, and its Add logs the set at once (amended 2026-10-10, plan 4a review). An empty value disables Add. The stepper's typed value, a pending set note and a chosen load survive a tab switch during rest; they are kept per block and the typed value only for the set number it was typed for.
+- **Stepper.** The value is the proposed next: last time's set at position *n* (`amountOf` of the paired block's *n*-th live set), else today's previous set in this block, else empty. − and + step by 1 for `reps`, by 5 for `seconds`; the value never drops below 1. Tapping the number opens the **number pad** (digits, `.`, backspace, Add) for decimals (16.5) and jumps (30). The pad opens empty with the current value as a placeholder, so the first key starts a fresh number, and its Add logs the set at once (amended 2026-10-10, plan 4a). An empty value disables Add. The stepper's typed value, a pending set note and a chosen load survive a tab switch during rest; they are kept per block and the typed value only for the set number it was typed for.
 - **Add set** calls `addSet` with `completedAt = now`, the sticky load, the metric of the exercise, `order = nextOrder(sets)`. The stepper then shows the next proposal.
 - **Sticky load** (pure): this block's last live set's `loadType` and `loadKg`; else the paired reference block's first live set; else the exercise's `defaultLoadType` with 0 kg. When that leaves `added` or `assist` at 0 kg (a weight is required, spec 1 §5), the **load sheet** opens before the first write of the block, once. The sheet has the five load types and a kg field; it is also what the load button opens.
 - Tapping one of today's chips opens the **set sheet**: the stepper on that set's value, load, note, Delete. Edits call `setSetFields` and never touch `completedAt` (D16).
@@ -214,11 +214,11 @@ A delete writes the tombstone at once and shows a toast for 6 s: "Set 14 deleted
 
 ### Exercises
 
-**Other exercise…** opens the catalog search: a text field with the live entries filtered by name as you type (archived entries in a collapsed group below), grouped by `family`. Tapping an entry adds a block. When no live entry matches the typed name exactly (`normalizeName`), the last line offers **Create "…"** with a short form: name (prefilled), pattern, metric (`reps` default), per side (off), default load type (`bodyweight` default), family (optional). It calls `createExercise`, which returns an existing entry when the name already exists under another id (unarchived or undeleted as needed, spec 1 §3). The catalog is written first, then the block; spec 3 S12 carries the catalog upload ahead of the session. With the catalog file quarantined or not yet pulled, Create is disabled with the reason (spec 1 §5) and existing entries can still be picked.
+**Other exercise…** opens the catalog search: a text field with the live entries filtered by name as you type (archived entries in a collapsed group below), grouped by `family`. Tapping an entry adds a block. When no live entry matches the typed name exactly (`normalizeName`), the last line offers **Create "…"** with a short form: name (prefilled), pattern, metric (`reps` default), per side (off), default load type (`bodyweight` default), family (optional). It calls `createExercise`, which returns an existing entry when the name already exists under another id (unarchived or undeleted as needed, spec 1 §3). When that entry's metric or per side differ from the form's, nothing is written and a sheet "An exercise named “X” exists" names the difference, with **Use it** (the existing entry, as it is) and Cancel (back to the form) (amended 2026-10-10, plan 4b). The catalog is written first, then the block; spec 3 S12 carries the catalog upload ahead of the session. With the catalog file quarantined or not yet pulled, Create is disabled with the reason (spec 1 §5) and existing entries can still be picked.
 
 ### Header and the rest
 
-Date and start time; **vs <reference> ▾** reopens the picker to change the reference (the choice is updated in `meta`); **Start new** (the confirm above); **Details** opens the open session's page (§5, `#/days/<sessionId>`) for untimed edits (amended 2026-10-10, plan 4a review); "offline" when `status.online` is false. **Done** navigates to the Days tab; nothing is written (U7). The **counter** shows mm:ss (h:mm:ss above an hour) since the latest `completedAt` of a live set in the session and is hidden before the first set; it reads the `now` signal and stores nothing.
+Date and start time; **vs <reference> ▾** reopens the picker to change the reference (the choice is updated in `meta`); **Start new** (the confirm above); **Details** opens the open session's page (§5, `#/days/<sessionId>`) for untimed edits (amended 2026-10-10, plan 4a); "offline" when `status.online` is false. **Done** navigates to the Days tab; nothing is written (U7). The **counter** shows mm:ss (h:mm:ss above an hour) since the latest `completedAt` of a live set in the session and is hidden before the first set; it reads the `now` signal and stores nothing.
 
 ### Rules
 
@@ -244,18 +244,18 @@ Sun 28 Feb?  —      Squats –  Split Squats ↑
 - Live sessions show the span from `startedAt` (else the earliest `completedAt`) to the latest `completedAt`, when both exist and differ; migrated sessions show nothing.
 - An open session carries the word **open** and tapping it goes to the Log tab; any other row opens the session page.
 
-Sessions on refused rows (`read-only`, `needs-update`, `quarantined`; `data.refusedRows`) whose content still parses as a session are listed with a lock mark and open read-only; a quarantined file that does not parse is only on the Sync tab. Two kinds of refused row are not listed (amended 2026-10-10, prototype T10), because the route `#/days/<sessionId>` carries only the id and the session page resolves the ok row first, so their row would open another file: the loser of a duplicate pair (`duplicateOf`), which spec 3 §6 already hides from views (its content was merged into the ok twin, which is the one row, editable; the Sync tab's "Duplicate file" card names both paths); and any refused row whose session id an ok row (tombstoned included) or an earlier refused row already holds. Both stay on the Sync tab.
+Sessions on refused rows (`read-only`, `needs-update`, `quarantined`; `data.refusedRows`) whose content still parses as a session are listed with a lock mark and open read-only; a quarantined file that does not parse is only on the Sync tab. Two kinds of refused row are not listed (amended 2026-10-10, plan 4a), because the route `#/days/<sessionId>` carries only the id and the session page resolves the ok row first, so their row would open another file: the loser of a duplicate pair (`duplicateOf`), which spec 3 §6 already hides from views (its content was merged into the ok twin, which is the one row, editable; the Sync tab's "Duplicate file" card names both paths); and any refused row whose session id an ok row (tombstoned included) or an earlier refused row already holds. Both stay on the Sync tab.
 
 ### Session page (`#/days/<sessionId>`)
 
-For every session, app-made and migrated alike, the open one included (amended 2026-10-10, plan 4a review): the Days row of the open session still goes to the Log tab, and the Log header's **Details** opens its page. The page works the same for an open session; a set added here carries no `completedAt` either.
+For every session, app-made and migrated alike, the open one included (amended 2026-10-10, plan 4a): the Days row of the open session still goes to the Log tab, and the Log header's **Details** opens its page. The page works the same for an open session; a set added here carries no `completedAt` either.
 
 - **Header:** date (editable; the file keeps its name, spec 1 D12, and the page says so once when the date changes), label (editable, one of the five or none), tags (remove with a tap; add from the tags seen in all sessions plus free text), notes (editable multi-line text; migrated sessions hold the raw sheet row, spec 2 §7). Each edit calls `setSessionFields` and touches only the session.
 - **Blocks** in canonical order. Each shows the exercise name (tap → exercise history), the block note (editable), the sets as chips with the load shown where it differs from the block's first set, the totals, both block indicators (`blockIndicator`) and the per-exercise indicator. Between timestamped sets the **set interval** of spec 1 §7 is shown as "+1:02" (labelled as an interval in the help text, not as rest); a set with `restSec` shows it as "rest 120 s".
 - **Edits:** tap a set → the set sheet (value, load, note, Delete); **Add set** adds one **without** `completedAt` (D16), `order = nextOrder`; **Add block** opens the exercise search of §4; a block's sheet has note, Move up, Move down (`moveBlock` uses `orderBetween` with the neighbours, nothing else is renumbered), Delete. Every delete gets the Undo toast.
 - **Delete session** at the bottom, behind a confirm: `deleteSession` tombstones the session only (no cascade, spec 1 §3), the file stays, the row leaves the Days list; Undo via the toast.
 - **Migrated shapes:** an `aggregate` set shows "100 total, set count unknown" and cannot be edited except for its note or deleted; a note-only block shows "no sets recorded"; `dateUncertain` shows the `?` with "date estimated by the migration"; the date sheet of such a session has a **date is exact** switch, and saving with it on drops `dateUncertain` (saving with it off keeps the flag even if the date changed).
-- **Refused rows** show the content read-only with a banner naming the reason (newer app, quarantined) and a link to the Sync tab. No edit control is rendered. The page resolves its id in `data.sessions` first, then in the refused rows the Days list shows (`lockedSessionRows` in `src/ui/locked.ts`; amended 2026-10-10, plan 4a review), so the list and the page agree on which file an id opens; a duplicate loser is never reached (above).
+- **Refused rows** show the content read-only with a banner naming the reason (newer app, quarantined) and a link to the Sync tab. No edit control is rendered. The page resolves its id in `data.sessions` first, then in the refused rows the Days list shows (`lockedSessionRows` in `src/ui/locked.ts`; amended 2026-10-10, plan 4a), so the list and the page agree on which file an id opens; a duplicate loser is never reached (above).
 
 ### New past session
 
@@ -267,7 +267,7 @@ A menu of four lines: **Exercises · Calendar · Bodyweight · Catalog**.
 
 ### Exercise list and history
 
-`#/more/exercises` lists every exercise grouped by `family`, live entries first, archived in a collapsed group; each line shows the name and the date of its last block. `#/more/exercise/<id>` is also reached from any exercise name in the app. It lists every live block of that exercise, newest session first, one row per block:
+`#/more/exercises` lists every exercise grouped by `family`, live entries first, archived in a collapsed group; each line shows the name and the date of its last block, with the year when it is not the current one (amended 2026-10-10, plan 4b). `#/more/exercise/<id>` is also reached from any exercise name in the app. It lists every live block of that exercise, newest session first, one row per block:
 
 ```
 Thu 04 Mar   17 16 15 14 13 12 11 10 9 8 7 6 5 10    143 · 14 sets  ↑  bw
@@ -275,11 +275,11 @@ Thu 27 Feb   17 16 15 14 13 12 11 10 9 8 7 6 5  9    142 · 14 sets  =  bw
 Thu 27 Feb ②  8 7 6 5 4 3 2 5                         40 · 8 sets   –  bw
 ```
 
-Date (with `?` when uncertain), the sets as written, total and set count, the block's amount indicator and load indicator against its previous occurrence (`blockIndicator`), and the block load (`bw`, `+11.5`, `−10`, `35 kg`, `band 50`). Two runs in one session are two rows, the second and later numbered. An `aggregate` set shows as `100*`; a note-only block shows its note. Tapping a row opens the session page. No chart (U5).
+Date (with `?` when uncertain), the sets as written, total and set count, the block's amount indicator and load indicator against its previous occurrence (`blockIndicator`), and the block load (`bw`, `+11.5`, `−10`, `35 kg`, `band 50`). Two runs in one session are two rows, the second and later numbered. An `aggregate` set shows as `100*`; a note-only block shows its note. Tapping a row opens the session page. The rows sit under a heading per year; the open session's marks are dimmed as provisional (§14) (amended 2026-10-10, plan 4b). No chart (U5).
 
 ### Calendar
 
-`#/more/calendar`: month grids, newest month first, scrolling back to the first session. Each day cell shows up to three dots coloured by the chips of its sessions (push, pull, legs, other; `sessionChips`), hollow when every session that day is `dateUncertain`. Above each month: sessions and training days in that month. At the top once: the current streak of calendar weeks (Monday to Sunday, local) with at least one session. Tapping a day lists its sessions; tapping one opens the session page (or the Log tab if it is open).
+`#/more/calendar`: month grids, newest month first, scrolling back to the first session. Each day cell shows up to three dots coloured by the chips of its sessions (push, pull, legs, other; `sessionChips`), hollow when every session that day is `dateUncertain`. Above each month: sessions and training days in that month. At the top once: the current streak of calendar weeks (Monday to Sunday, local) with at least one session. Tapping a day lists its sessions; tapping one opens the session page (or the Log tab if it is open). The newest months mount first; earlier ones mount as the list end scrolls near, or with **Show earlier months** (amended 2026-10-10, plan 4b).
 
 ### Bodyweight
 
@@ -289,13 +289,15 @@ Date (with `?` when uncertain), the sets as written, total and set count, the bl
 
 `#/more/catalog`: every exercise, live first by family, then archived; each line shows name, pattern, metric, per side and default load type. Tapping opens `#/more/catalog/<id>`, the edit form:
 
-- **Name** (rename keeps the id; the uniqueness check of spec 1 §3 runs on save and, on a clash, offers the existing entry instead of saving), **family**, **pattern**, **default load type**, **cues**.
+- **Name** (rename keeps the id; the uniqueness check of spec 1 §3 runs on save against every entry, deleted ones included, and, on a clash, offers the existing entry instead of saving; a deleted one can then be restored from its page), **family**, **pattern**, **default load type**, **cues** (amended 2026-10-10, plan 4b).
 - **Metric** and **per side** are displayed and locked, with the line "fixed at creation; create a new exercise instead" (spec 1 §3).
 - **Archive / Unarchive.**
 - **Delete** is shown only when no live block of any live session references the exercise; otherwise only Archive is offered, with the reason. Delete tombstones (Undo toast). A race with the other device is healed by `restoreReferenced` (spec 1 §3).
-- **Create** at the top of the list uses the same form as the inline create of §4.
+- **Create** at the top of the list uses the same form as the inline create of §4. A name that exists opens that entry when it is live with the same metric and per side; otherwise the clash sheet of §4 asks first, also before bringing back an archived or deleted entry (amended 2026-10-10, plan 4b).
+- A deleted exercise's page (reached by a link or "Use it") shows its fields read-only with **Restore** as the only action. Delete counts the locked sessions of §5 too (amended 2026-10-10, plan 4b).
+- A rename clashes with any entry of that name, deleted ones included (spec 1 §3: tombstoned names count), and the clash sheet offers that entry; a deleted one can then be restored from its page. **Restore** and the delete's **Undo** still check the name first, for the offline race spec 1 §3 accepts (another device naming an entry alike before the sync): while a non-deleted entry holds it, nothing is written; Restore opens the clash sheet ("Use it" opens that entry), Undo shows "Not restored: an exercise named “X” exists" with **Open**. The engine's `restoreReferenced` heal is unchanged (spec 1 §3) (amended 2026-10-10, plan 4b).
 
-With the catalog file quarantined, this screen is read-only with a banner (spec 1 §5).
+With the catalog file quarantined, this screen is read-only with a banner (spec 1 §5). A read-only or needs-update file (written by a newer app) still lists its entries without edit controls; the bodyweight page does the same (amended 2026-10-10, plan 4b).
 
 ## 7. The Sync tab
 
@@ -320,14 +322,14 @@ Replaces the shell of spec 3 §12 one to one and adds the soft issues. Top to bo
 
 Soft issues are a `computed` over `data.sessions` and `data.catalog` with `checkCatalogRules` (spec 1 §5, D13). They never block anything.
 
-- **Issues** and **Data** render in every connection state, so a badge raised while disconnected is always explained (amended 2026-10-10, plan 4a review).
+- **Issues** and **Data** render in every connection state, so a badge raised while disconnected is always explained (amended 2026-10-10, plan 4a).
 - **Data.** Counts of live sessions, exercises and bodyweight entries; the build id; "storage persistent" or not; **Sign out** with the queue confirm as today.
 
 **Badge** on the Sync tab: the number of issues (hard and soft) plus held-back writes; a dot alone when not connected or when an update waits. Nothing else in the app shows sync state except the "offline" word in the Log header.
 
 ## 8. Theme, layout and interaction rules
 
-- **Tokens** (U11) in `src/ui/theme.css` on `:root`: `--bg`, `--panel`, `--panel-2`, `--text`, `--muted`, `--accent`, `--ok`, `--danger`, `--outline`. The values start from the mockup the owner approved (dark: `#111827`, `#1f2937`, `#273449`, `#e5e7eb`, `#9ca3af`, `#f59e0b`, `#34d399`, `#f87171`, `#374151`). A component stylesheet may only reference tokens; a test greps `src/ui` for literal colours outside `theme.css` and fails on any.
+- **Tokens** (U11) in `src/ui/theme.css` on `:root`: `--bg`, `--panel`, `--panel-2`, `--text`, `--muted`, `--accent`, `--ok`, `--danger`, `--outline`, plus `--on-accent` (text on the accent colour) and the calendar's `--chip-push`, `--chip-pull`, `--chip-legs`, `--chip-other` (amended 2026-10-10, plans 4a and 4b). The values start from the mockup the owner approved (dark: `#111827`, `#1f2937`, `#273449`, `#e5e7eb`, `#9ca3af`, `#f59e0b`, `#34d399`, `#f87171`, `#374151`). A component stylesheet may only reference tokens; a test greps `src/ui` for literal colours outside `theme.css` and fails on any.
 - **Touch targets** at least 44 × 44 px. The entry area and tab bar respect `env(safe-area-inset-*)`. The stepper and Add sit in the bottom third of the screen.
 - **Text** is English (spec 1 D10). Dates show the weekday and the local calendar day; times are local; durations are mm:ss or h:mm:ss; decimals use the device locale for display only (the file always stores JSON numbers).
 - **Indicators** are rendered as ↑ ↓ = ≠ –, with a text alternative for screen readers; the amount mark first, then the load mark, load hidden when both blocks are plain bodyweight (spec 1 §7).
