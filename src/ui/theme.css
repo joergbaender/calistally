@@ -242,3 +242,103 @@ input, select, textarea { font-size: 16px; } /* iOS: no zoom on focus below 16 p
 }
 .backbar__title { margin: 0; font-size: 18px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .backbar__right { display: flex; align-items: center; gap: 8px; }
+
+/* ---- .app__main (app) ---- */
+/* The scrolling area; the tab bar is fixed, so the bottom padding keeps the last row above it (the entry area adds its own later). */
+.app__main {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: env(safe-area-inset-top, 0px) 16px calc(56px + 16px + env(safe-area-inset-bottom, 0px));
+}
+
+/* ---- .tabbar (app) ---- */
+.tabbar {
+  position: fixed;
+  bottom: 0;
+  inset-inline: 0;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  height: calc(56px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: var(--panel);
+  border-top: 1px solid var(--outline);
+}
+.tabbar__tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+}
+.tabbar__tab.is-active { color: var(--accent); }
+.tabbar__badge {
+  position: absolute;
+  top: 6px;
+  left: calc(50% + 12px);
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--danger);
+  color: var(--on-accent);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.tabbar__dot {
+  position: absolute;
+  top: 10px;
+  left: calc(50% + 16px);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* ---- .placeholder (stub screens) ---- */
+.placeholder { padding: 24px 0; color: var(--muted); }
+.placeholder h2 { margin: 0 0 8px; color: var(--text); }
+
+/* ---- .sync (components/sync) ---- */
+.sync { display: flex; flex-direction: column; gap: 12px; padding-top: 12px; }
+.sync__title { margin: 0; font-size: 22px; }
+.sync__footer { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+.sync__muted { color: var(--muted); }
+.sync--error { color: var(--danger); }
+.sync--ok { color: var(--ok); }
+.sync-card { padding: 12px 16px; border-radius: 12px; background: var(--panel); }
+.sync-card p { margin: 6px 0; overflow-wrap: anywhere; }
+.sync-card--notice { border-left: 3px solid var(--accent); }
+.sync-card__title { margin: 0 0 8px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.sync-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.sync-rows { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
+.sync-rows dt { color: var(--muted); }
+.sync-rows dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.sync-paste { margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--outline); }
+.sync-paste a { color: var(--accent); }
+.sync-paste__code {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  margin: 4px 0 8px;
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+}
+.sync-issues { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.sync-issue { padding: 8px 12px; border-radius: 10px; background: var(--panel-2); border-left: 3px solid var(--danger); }
+.sync-issue--soft { border-left-color: var(--accent); }
+.sync-issue__head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.sync-issue__title { font-weight: 600; }
+.sync-issue__path { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.sync-issue__detail { color: var(--text); }
+.sync-issue__advice { color: var(--muted); }
+.sync-issue__link { color: var(--accent); }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; }

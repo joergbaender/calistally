@@ -1,13 +1,17 @@
 import { registerSW } from 'virtual:pwa-register';
+import { raceIdle } from './idle';
 
-/** The one-tap update (spec 3 §8): prompt mode, reload only when the engine is idle. */
+/** The one-tap update (spec 3 §8, spec 4 §7): prompt mode, reload only when the engine is idle. */
 export interface SwUpdate {
   /** A new build is installed and waiting. */
   updateAvailable: boolean;
   /** Ask the browser to look for a new service worker now. */
   check(): Promise<void>;
-  /** Activate the waiting build and reload, after `whenIdle` resolves (at most 10 s). */
-  apply(whenIdle: () => Promise<void>): Promise<void>;
+  /**
+   * Activate the waiting build and reload once `whenIdle` resolves, at most 10 s later:
+   * 'reloading' when the reload was requested, 'busy' when the engine did not go idle in time.
+   */
+  apply(whenIdle: () => Promise<void>): Promise<'reloading' | 'busy'>;
 }
 
 export const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
@@ -25,8 +29,9 @@ export function setupSwUpdate(onChange: () => void): SwUpdate {
       }
     },
     async apply(whenIdle) {
-      await Promise.race([whenIdle(), new Promise((r) => setTimeout(r, IDLE_WAIT_MS))]);
+      if (await raceIdle(whenIdle, IDLE_WAIT_MS) === 'timeout') return 'busy';
       await updateSW(true);
+      return 'reloading';
     },
   };
   const updateSW = registerSW({
