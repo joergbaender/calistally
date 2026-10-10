@@ -6,7 +6,10 @@ import type { SessionRow } from '../../data';
 import { Button, Marks, SetChips } from '../shared';
 import type { CardVm, LogScreenVm } from './log-screen.vm';
 import { currentBlockId } from './log-state';
+import { BlockSheet } from './BlockSheet';
+import { ExerciseSearch } from './ExerciseSearch';
 import { editSession } from './outcome';
+import { SetSheet } from './SetSheet';
 import { PickerSheet } from './StartPicker';
 import { useWriteGuard } from './use-write-guard';
 
@@ -80,7 +83,9 @@ export function LogScreen(p: { row: SessionRow; vm: LogScreenVm }): JSX.Element 
       </div>
 
       {sheet?.kind === 'picker' && <PickerSheet mode={sheet.mode} sessionId={p.row.file.session.id} onClose={close} />}
-      {/* The set, block and search sheets follow in task 9. */}
+      {sheet?.kind === 'set' && <SetSheet row={p.row} setId={sheet.setId} onClose={close} />}
+      {sheet?.kind === 'block' && <BlockSheet row={p.row} blockId={sheet.blockId} name={sheet.name} onClose={close} />}
+      {sheet?.kind === 'search' && <ExerciseSearch onPick={startBlock} onClose={close} />}
     </section>
   );
 }

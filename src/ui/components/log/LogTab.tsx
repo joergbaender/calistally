@@ -2,6 +2,7 @@ import type { JSX } from 'preact';
 import { useEffect } from 'preact/hooks';
 import { useApp } from '../../context';
 import type { SessionRow } from '../../data';
+import { EntryArea } from './EntryArea';
 import { logScreenVm, resolveReference } from './log-screen.vm';
 import { currentBlockId, referenceId, referenceLoadedFor } from './log-state';
 import { LogScreen } from './LogScreen';
@@ -53,5 +54,10 @@ function OpenSession(p: { row: SessionRow }): JSX.Element {
     now: data.now.value,
     online: data.status.value.online,
   });
-  return <LogScreen row={p.row} vm={vm} />;
+  return (
+    <>
+      <LogScreen row={p.row} vm={vm} />
+      {vm.current !== undefined && <EntryArea row={p.row} current={vm.current} />}
+    </>
+  );
 }

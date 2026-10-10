@@ -276,6 +276,20 @@ describe('LogTab with an open session', () => {
     await waitFor(() => expect(screen.getByRole('article', { name: 'Dips (Bar)' }).className).toContain('log-card--current'));
   });
 
+  it("a tap on a finished card's today chip opens the set sheet and does not make the card current", async () => {
+    const past = pastPush();
+    const today = openToday();
+    today.blocks.push(block([], { exerciseId: 'push-ups', order: 1 }));
+    await mount([past, today], { [`reference:${today.id}`]: past.id });
+    await waitFor(() => expect(screen.getByRole('article', { name: 'Push-ups' }).className).toContain('log-card--current'));
+    const chip = within(screen.getByRole('article', { name: 'Dips (Bar)' })).getAllByRole('button', { name: '8' })[0] as HTMLElement;
+    fireEvent.click(chip);
+    expect(screen.getByRole('dialog', { name: 'Set' })).toBeTruthy();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.getByRole('article', { name: 'Dips (Bar)' }).className).toContain('log-card--finished');
+    expect(screen.getByRole('article', { name: 'Push-ups' }).className).toContain('log-card--current');
+  });
+
   it('renders no card before the stored reference is read, so the proposal never flashes', async () => {
     const past = pastPush();
     const today = openToday();
