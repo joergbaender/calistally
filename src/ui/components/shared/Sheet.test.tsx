@@ -34,6 +34,13 @@ describe('Sheet', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('a tap on the backdrop does not close it, so typed input is never lost', () => {
+    const onClose = vi.fn();
+    render(<Sheet title="Load" onClose={onClose}><p>body</p></Sheet>);
+    fireEvent.click(document.querySelector('.sheet__backdrop') as HTMLElement);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('focuses the dialog on mount so Escape works without an inner focus', () => {
     render(<Sheet title="Load" onClose={() => {}}><p>body</p></Sheet>);
     expect(document.activeElement).toBe(screen.getByRole('dialog'));
