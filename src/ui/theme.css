@@ -733,3 +733,55 @@ span.session-head__tag { display: inline-flex; align-items: center; min-height: 
   .xhist__totals { justify-self: start; text-align: left; white-space: nowrap; }
   .xhist__note { grid-column: 2 / -1; }
 }
+
+/* Why the submit button is disabled for a typed 0. */
+.numpad__hint { margin: -4px 0 0; color: var(--danger); font-size: 14px; text-align: right; }
+
+/* ---- .bw (components/more/BodyweightPage, BodyweightSheet) ---- */
+.bw { display: flex; flex-direction: column; gap: 12px; }
+.bw__banner { margin: 0; padding: 8px 12px; border-radius: 10px; background: var(--panel); border-left: 3px solid var(--danger); }
+.bw__actions { display: flex; justify-content: flex-end; }
+.bw__empty { margin: 0; color: var(--muted); }
+.bw__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.bw-line { display: block; width: 100%; height: auto; border-radius: 12px; background: var(--panel); }
+.bw-line__path { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.bw-line__label { fill: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.bw-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--panel);
+  text-align: left;
+}
+.bw-row:disabled { cursor: default; }
+.bw-row__day { min-width: 7em; color: var(--muted); }
+.bw-row__kg { font-variant-numeric: tabular-nums; font-weight: 600; }
+.bw-row__note { flex-basis: 100%; color: var(--muted); font-size: 14px; }
+.bw-sheet__label { margin: 0; color: var(--muted); }
+.bw-sheet__kg {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  background: var(--bg);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+.bw-sheet__field { display: flex; flex-direction: column; gap: 4px; color: var(--muted); }
+.bw-sheet__field input {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+}
+.bw-sheet__problem { margin: 0; color: var(--danger); }
+.bw-sheet__actions { display: flex; justify-content: flex-end; gap: 8px; }

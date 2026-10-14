@@ -1,6 +1,7 @@
 import { Value } from '@sinclair/typebox/value';
 import { Lenient } from '../model/schema';
-import type { Session } from '../model/types';
+import type { BodyweightEntry, Exercise, Session } from '../model/types';
+import { BODYWEIGHT_PATH, EXERCISES_PATH } from '../sync/paths';
 import type { FileRow } from '../sync/store';
 
 /**
@@ -47,4 +48,23 @@ export function lockedSessionRows(rows: readonly FileRow[], okSessionIds: Readon
 /** The sessions of `lockedSessionRows`, for the Days list. */
 export function lockedSessionsOf(rows: readonly FileRow[], okSessionIds: ReadonlySet<string> = new Set()): Session[] {
   return lockedSessionRows(rows, okSessionIds).map((l) => l.session);
+}
+
+/** The refused row at `path` when it is only locked for writing (read-only, needs-update: written by
+ *  a newer app, read leniently, spec 1/3), never a quarantined file or a duplicate loser. */
+function lockedRowAt(rows: readonly FileRow[], path: string): FileRow | undefined {
+  return rows.find((r) => r.path === path && r.duplicateOf === undefined && (r.status === 'read-only' || r.status === 'needs-update'));
+}
+
+/** Spec 4 §6: the catalog of a read-only exercises.json, shown read-only; undefined when the file is
+ *  not locked that way or fails the lenient schema (then only the banner shows). */
+export function readOnlyCatalog(rows: readonly FileRow[]): Exercise[] | undefined {
+  const content = lockedRowAt(rows, EXERCISES_PATH)?.content;
+  return Value.Check(Lenient.ExercisesFile, content) ? (content.exercises as Exercise[]) : undefined;
+}
+
+/** Spec 4 §6: the entries of a read-only bodyweight.json, shown read-only; as `readOnlyCatalog`. */
+export function readOnlyBodyweight(rows: readonly FileRow[]): BodyweightEntry[] | undefined {
+  const content = lockedRowAt(rows, BODYWEIGHT_PATH)?.content;
+  return Value.Check(Lenient.BodyweightFile, content) ? (content.entries as BodyweightEntry[]) : undefined;
 }

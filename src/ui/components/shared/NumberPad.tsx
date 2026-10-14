@@ -19,16 +19,20 @@ function parse(text: string, allowZero: boolean): number | undefined {
  * (no backspacing over the old value first). `submitLabel` names what the button does where the
  * pad is used
  * ("Add" adds the set, "Use" only sets the value); `allowZero` accepts 0 (a 0 kg external or band load).
+ * Without it, a typed 0 shows `zeroHint` (default "More than 0") under the display, so the disabled
+ * button has a reason.
  */
 export function NumberPad(p: {
   value: number | undefined;
   submitLabel: string;
   allowZero: boolean;
+  zeroHint?: string;
   onSubmit(v: number): void;
   onCancel(): void;
 }): JSX.Element {
   const [text, setText] = useState('');
   const parsed = parse(text, p.allowZero);
+  const typedZero = !p.allowZero && text !== '' && text !== '.' && Number(text) === 0;
   const type = (ch: string): void => {
     if (ch === '.' && text.includes('.')) return;
     setText(text + ch);
@@ -47,6 +51,7 @@ export function NumberPad(p: {
         placeholder={p.value === undefined ? '' : formatAmount(p.value)}
         aria-label="Value"
       />
+      {typedZero && <p class="numpad__hint" role="status">{p.zeroHint ?? 'More than 0'}</p>}
       <div class="numpad__keys">
         {DIGITS.map((d) => key(d, () => type(d)))}
         {key('.', () => type('.'))}

@@ -4,7 +4,7 @@ import { sessionFile } from '../../../model/test-fixtures';
 import type { SessionFile } from '../../../model/types';
 import type { WriteOutcome } from '../../data';
 import { dismissToast, showToast, toast } from '../../toast';
-import { editSession, editSessionQuiet, HELD_BACK_TEXT, quietOutcome, reportOutcome, showHeldBack } from './outcome';
+import { editSession, editSessionQuiet, HELD_BACK_TEXT, quietOutcome, quietWrite, reportOutcome, reportWrite, showHeldBack } from './outcome';
 
 afterEach(() => dismissToast());
 
@@ -113,5 +113,29 @@ describe('editSession', () => {
     await expect(editSession(fakeData({ ok: true, heldBack: false }), '/s.json', () => {
       throw new TypeError('bug');
     })).rejects.toThrow('bug');
+  });
+});
+
+describe('quietWrite and reportWrite (any file kind: Data.create or Data.edit)', () => {
+  it('quietWrite returns the owed note, names a refusal, and turns an EditError into a toast', async () => {
+    expect(await quietWrite('/qw.json', () => Promise.resolve({ ok: true, heldBack: true }))).toEqual({ ok: true, heldBackNote: true });
+    expect(toast.value).toBeUndefined();
+    expect(await quietWrite('/qw.json', () => Promise.resolve({ ok: false, reason: 'missing' }))).toEqual({ ok: false });
+    expect(toast.value?.text).toBe('This session no longer exists');
+    expect(await quietWrite('/qw.json', () => Promise.reject(new EditError('bodyweight must be more than 0 kg, got 0')))).toEqual({ ok: false });
+    expect(toast.value?.text).toBe('bodyweight must be more than 0 kg, got 0');
+    await expect(quietWrite('/qw.json', () => Promise.reject(new TypeError('bug')))).rejects.toThrow('bug');
+  });
+
+  it('reportWrite shows the held-back note itself and returns whether the write went through', async () => {
+    expect(await reportWrite('/rw.json', () => Promise.resolve({ ok: true, heldBack: true }))).toBe(true);
+    expect(toast.value?.text).toBe(HELD_BACK_TEXT);
+    dismissToast();
+    expect(await reportWrite('/rw.json', () => Promise.resolve({ ok: false, reason: 'changed' }))).toBe(false);
+    expect(toast.value?.text).toBe('Changed elsewhere, try again');
+    expect(await reportWrite('/rw.json', () => {
+      throw new EditError('not a calendar date: 2030-02-30');
+    })).toBe(false);
+    expect(toast.value?.text).toBe('not a calendar date: 2030-02-30');
   });
 });

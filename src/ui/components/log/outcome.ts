@@ -49,11 +49,11 @@ export function reportOutcome(path: string, outcome: WriteOutcome): boolean {
   return written.ok;
 }
 
-/** One session edit through Data.edit with the toasts of `quietOutcome`, and an EditError from `fn`
- *  shown as a toast with its message. */
-export async function editSessionQuiet(data: Pick<Data, 'edit'>, path: string, fn: (file: SessionFile) => SessionFile): Promise<Written> {
+/** One write of any file kind (a `Data.edit` or a `Data.create`) with the toasts of `quietOutcome`,
+ *  and an EditError thrown while building the file shown as a toast with its message. */
+export async function quietWrite(path: string, write: () => Promise<WriteOutcome>): Promise<Written> {
   try {
-    return quietOutcome(path, await data.edit('session', path, fn));
+    return quietOutcome(path, await write());
   } catch (e) {
     if (e instanceof EditError) {
       showToast(e.message);
@@ -61,6 +61,19 @@ export async function editSessionQuiet(data: Pick<Data, 'edit'>, path: string, f
     }
     throw e;
   }
+}
+
+/** `quietWrite` with the held-back note shown at once. True when the write went through. */
+export async function reportWrite(path: string, write: () => Promise<WriteOutcome>): Promise<boolean> {
+  const written = await quietWrite(path, write);
+  if (written.ok && written.heldBackNote) showToast(HELD_BACK_TEXT);
+  return written.ok;
+}
+
+/** One session edit through Data.edit with the toasts of `quietOutcome`, and an EditError from `fn`
+ *  shown as a toast with its message. */
+export function editSessionQuiet(data: Pick<Data, 'edit'>, path: string, fn: (file: SessionFile) => SessionFile): Promise<Written> {
+  return quietWrite(path, () => data.edit('session', path, fn));
 }
 
 /** One session edit through Data.edit: the outcome toasts of reportOutcome, and an EditError from

@@ -1,7 +1,36 @@
 import { describe, expect, it } from 'vitest';
-import { block, ladder, session, sessionFile } from '../model/test-fixtures';
+import { block, bodyweight, bodyweightFile, exercise, exercisesFile, ladder, session, sessionFile } from '../model/test-fixtures';
+import { BODYWEIGHT_PATH, EXERCISES_PATH } from '../sync/paths';
 import type { FileRow } from '../sync/store';
-import { lockedSessionRows, lockedSessionsOf } from './locked';
+import { lockedSessionRows, lockedSessionsOf, readOnlyBodyweight, readOnlyCatalog } from './locked';
+
+describe('readOnlyCatalog and readOnlyBodyweight', () => {
+  const catalogRow = (content: unknown, over: Partial<FileRow> = {}): FileRow => ({
+    path: EXERCISES_PATH, kind: 'exercises', rev: 'r1', content, status: 'read-only', issues: [], version: 1, ...over,
+  });
+  const bodyRow = (content: unknown, over: Partial<FileRow> = {}): FileRow => ({
+    path: BODYWEIGHT_PATH, kind: 'bodyweight', rev: 'r1', content, status: 'needs-update', issues: [], version: 1, ...over,
+  });
+
+  it('give the lenient content of a read-only or needs-update file (spec 4 §6: shown read-only)', () => {
+    const e = exercise({ id: 'dips', name: 'Dips' });
+    expect(readOnlyCatalog([catalogRow({ ...exercisesFile([e]), schemaVersion: 99, extra: true })])).toEqual([e]);
+    expect(readOnlyCatalog([catalogRow(exercisesFile([e]), { status: 'needs-update' })])).toEqual([e]);
+    const b = bodyweight({ kg: 80 });
+    expect(readOnlyBodyweight([bodyRow(bodyweightFile([b]))])).toEqual([b]);
+    expect(readOnlyBodyweight([bodyRow(bodyweightFile([b]), { status: 'read-only' })])).toEqual([b]);
+  });
+
+  it('give nothing for a quarantined or duplicate row, content that does not parse, or no row', () => {
+    const e = exercise();
+    expect(readOnlyCatalog([catalogRow(exercisesFile([e]), { status: 'quarantined' })])).toBeUndefined();
+    expect(readOnlyCatalog([catalogRow(exercisesFile([e]), { duplicateOf: '/other.json' })])).toBeUndefined();
+    expect(readOnlyCatalog([catalogRow({ schemaVersion: 1, exercises: 'no' })])).toBeUndefined();
+    expect(readOnlyCatalog([])).toBeUndefined();
+    expect(readOnlyBodyweight([bodyRow({ schemaVersion: 1, entries: [{ id: 'x' }] })])).toBeUndefined();
+    expect(readOnlyBodyweight([bodyRow(bodyweightFile([bodyweight()]), { status: 'quarantined' })])).toBeUndefined();
+  });
+});
 
 const row = (content: unknown, over: Partial<FileRow> = {}): FileRow => ({
   path: '/sessions/2030/2030-03-04_00000000.json', kind: 'session', rev: 'r1', content, status: 'quarantined', issues: [], version: 1, ...over,
