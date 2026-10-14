@@ -51,10 +51,18 @@ export interface CurrentVm {
   loadText: string;
 }
 
+/** A tap on the rest counter (spec 4 §4), kept in meta `restStop:<sessionId>`: `after` is the latest
+ *  completedAt at the tap, `at` the tap time. It applies only while that set is still the latest. */
+export interface RestStop {
+  after: string;
+  at: string;
+}
+
 export interface LogScreenVm {
   header: { date: string; startedAt: string; reference: string | undefined; offline: boolean };
   cards: CardVm[];
-  counter: string | undefined;
+  /** The rest since the latest set; `stopped` → frozen on the rest taken at the tap. */
+  counter: { text: string; stopped: boolean } | undefined;
   current: CurrentVm | undefined;
 }
 
@@ -65,6 +73,7 @@ export interface LogScreenInput {
   currentBlockId: string | undefined;
   now: Date;
   online: boolean;
+  restStop?: RestStop | undefined;
 }
 
 /** Spec 4 §4 "Resume": the stored choice when it names a live session other than today; 'none'
@@ -128,8 +137,12 @@ export function logScreenVm(input: LogScreenInput): LogScreenVm {
   const pairs = pairCards(today, reference);
   const cards = pairs.map((p) => cardOf(p, catalog.get(p.exerciseId), effectiveCurrent));
 
+  // The stop counts only while the set it was stopped after is still the latest: the next set
+  // (or deleting that one) runs the counter again with no write.
   const latest = latestCompletedAt(today);
-  const counter = latest === undefined ? undefined : formatClock(Math.max(0, (now.getTime() - Date.parse(latest)) / 1000));
+  const stop = input.restStop !== undefined && input.restStop.after === latest ? input.restStop : undefined;
+  const until = stop === undefined ? now.getTime() : Date.parse(stop.at);
+  const counter = latest === undefined ? undefined : { text: formatClock(Math.max(0, (until - Date.parse(latest)) / 1000)), stopped: stop !== undefined };
 
   const index = cards.findIndex((c) => c.state === 'current');
   const card = cards[index];

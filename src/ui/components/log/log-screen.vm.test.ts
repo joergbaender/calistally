@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { block, exercise, ladder, session, set, timedSet } from '../../../model/test-fixtures';
 import type { Block, Exercise, Session } from '../../../model/types';
 import { formatAmount, formatTime } from '../../format';
-import { logScreenVm, resolveReference } from './log-screen.vm';
+import { logScreenVm, resolveReference, type RestStop } from './log-screen.vm';
 
 const PUSH = exercise({ id: 'push-ups', name: 'Push-ups', pattern: 'push' });
 const DIPS = exercise({ id: 'dips-bar', name: 'Dips (Bar)', pattern: 'push', defaultLoadType: 'added' });
@@ -30,8 +30,8 @@ function fixture() {
   return { reference, today, refDips, refPush, refDiamond, todayDips, todayPush };
 }
 
-const vmOf = (today: Session, reference: Session | undefined, over: { currentBlockId?: string; now?: Date; online?: boolean } = {}) =>
-  logScreenVm({ today, reference, catalog: CATALOG, currentBlockId: over.currentBlockId, now: over.now ?? NOW, online: over.online ?? true });
+const vmOf = (today: Session, reference: Session | undefined, over: { currentBlockId?: string; now?: Date; online?: boolean; restStop?: RestStop } = {}) =>
+  logScreenVm({ today, reference, catalog: CATALOG, currentBlockId: over.currentBlockId, now: over.now ?? NOW, online: over.online ?? true, restStop: over.restStop });
 
 describe('logScreenVm header', () => {
   it('shows the long date, the start time and the reference day', () => {
@@ -194,9 +194,40 @@ describe('logScreenVm counter and current', () => {
   it('counts from the latest completedAt; undefined before the first set', () => {
     const f = fixture();
     // The last push-up set completed at 10:13; now 10:30 → 17:00.
-    expect(vmOf(f.today, f.reference).counter).toBe('17:00');
-    expect(vmOf(f.today, f.reference, { now: new Date('2030-03-07T10:13:48.000Z') }).counter).toBe('0:48');
+    expect(vmOf(f.today, f.reference).counter).toEqual({ text: '17:00', stopped: false });
+    expect(vmOf(f.today, f.reference, { now: new Date('2030-03-07T10:13:48.000Z') }).counter).toEqual({ text: '0:48', stopped: false });
     expect(vmOf({ ...f.today, blocks: [block([], { exerciseId: 'push-ups' })] }, undefined).counter).toBeUndefined();
+  });
+
+  // The last push-up set of the fixture completed at 10:13.
+  const STOP: RestStop = { after: '2030-03-07T10:13:00.000Z', at: '2030-03-07T10:14:30.000Z' };
+
+  it('a stop after the latest set freezes the counter on the rest taken, whatever now says', () => {
+    const f = fixture();
+    expect(vmOf(f.today, f.reference, { restStop: STOP }).counter).toEqual({ text: '1:30', stopped: true });
+    expect(vmOf(f.today, f.reference, { restStop: STOP, now: new Date('2030-03-07T11:00:00.000Z') }).counter).toEqual({ text: '1:30', stopped: true });
+  });
+
+  it('runs again from the next set once one is added after the stop', () => {
+    const f = fixture();
+    const push: Block = { ...f.todayPush, sets: [...f.todayPush.sets, set({ reps: 13, order: 4, completedAt: '2030-03-07T10:20:00.000Z' })] };
+    const today: Session = { ...f.today, blocks: [f.todayDips, push] };
+    expect(vmOf(today, f.reference, { restStop: STOP }).counter).toEqual({ text: '10:00', stopped: false });
+  });
+
+  it('runs from the earlier set when the latest is deleted after the stop; restoring it freezes it again', () => {
+    const f = fixture();
+    const sets = f.todayPush.sets.map((s, i) => (i === 3 ? { ...s, deletedAt: '2030-03-07T10:15:00.000Z' } : s));
+    const deleted: Session = { ...f.today, blocks: [f.todayDips, { ...f.todayPush, sets }] };
+    // The set before completed at 10:12; now 10:30 → 18:00.
+    expect(vmOf(deleted, f.reference, { restStop: STOP }).counter).toEqual({ text: '18:00', stopped: false });
+    expect(vmOf(f.today, f.reference, { restStop: STOP }).counter).toEqual({ text: '1:30', stopped: true });
+  });
+
+  it('ignores a stop recorded after another set', () => {
+    const f = fixture();
+    const old: RestStop = { after: '2030-03-07T10:12:00.000Z', at: '2030-03-07T10:12:40.000Z' };
+    expect(vmOf(f.today, f.reference, { restStop: old }).counter).toEqual({ text: '17:00', stopped: false });
   });
 
   it('builds the entry data from the current card', () => {

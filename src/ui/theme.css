@@ -408,7 +408,21 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .log-card__caption { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
 .log-card__note { margin: 0; color: var(--muted); font-style: italic; overflow-wrap: anywhere; }
 .log-card__totals { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
-.log-card__counter { margin-left: auto; color: var(--accent); font-weight: 600; }
+/* A tap stops the counter (spec 4 §4); stopped, it is muted and outlined. */
+.log-card__counter {
+  min-width: 44px;
+  min-height: 44px;
+  margin-left: auto;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--accent);
+  font-size: inherit;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.log-card__counter.is-stopped { border-color: var(--muted); color: var(--muted); }
 .log-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 4px 0 12px; }
 
 /* ---- .entry (components/log/EntryArea) ---- */

@@ -1,5 +1,6 @@
 import { signal, type Signal } from '@preact/signals';
 import type { LoadType } from '../../../model/types';
+import type { RestStop } from './log-screen.vm';
 
 /** Spec 4 §4 "Current block": the block the owner last started or added a set to (in memory only).
  *  undefined → the last live block of today (logScreenVm's fallback). */
@@ -12,6 +13,10 @@ export const referenceId: Signal<string | 'none' | undefined> = signal<string | 
 /** The session id whose stored reference `referenceId` holds. A remount of the Log tab for the same
  *  session (a tab switch) shows the cards at once instead of reading the meta key again. */
 export const referenceLoadedFor: Signal<string | undefined> = signal<string | undefined>(undefined);
+
+/** The stopped rest counter of the session named (spec 4 §4), loaded from meta `restStop:<sessionId>`
+ *  together with the reference; undefined → running. Device-local, never in a file. */
+export const restStop: Signal<(RestStop & { sessionId: string }) | undefined> = signal<(RestStop & { sessionId: string }) | undefined>(undefined);
 
 /** What the owner set up for a block's next set and has not added yet: the typed value, the note
  *  and the load wait for Add set instead of being lost on a re-render or a tab switch. */
