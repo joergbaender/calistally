@@ -656,3 +656,80 @@ span.session-head__tag { display: inline-flex; align-items: center; min-height: 
 .sessionsheet__switch input { width: 22px; height: 22px; accent-color: var(--accent); }
 .tagsheet__seen { display: flex; flex-wrap: wrap; gap: 6px; }
 .setsheet__aggregate { margin: 0; color: var(--muted); }
+
+/* ---- .more-menu, .more-page (components/more) ---- */
+.more-menu { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; }
+.more-menu__title { margin: 0 0 4px; font-size: 22px; }
+.more-menu__item {
+  min-height: 52px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--panel);
+  text-align: left;
+  font-size: 17px;
+}
+.more-page { display: flex; flex-direction: column; gap: 8px; }
+.more-page__empty { color: var(--muted); }
+
+/* ---- .xlist (more/ExercisesPage) ---- */
+.xlist__group { margin-top: 8px; }
+.xlist__family { margin: 0 0 4px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.xlist__rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.xlist__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--panel);
+  text-align: left;
+}
+.xlist__date { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.xlist__archived { margin-top: 12px; }
+.xlist__archived > summary { min-height: 44px; padding: 10px 0; color: var(--muted); cursor: pointer; }
+
+/* ---- .xhist (more/ExerciseHistoryPage) ---- */
+.xhist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.xhist__status { margin: 0; color: var(--muted); }
+.xhist__yeartitle { margin: 12px 0 4px; font-size: 13px; color: var(--muted); letter-spacing: 0.04em; }
+/* A phone gets two lines: date, totals, marks and load, then the sets across the full width (a
+   one-line row squeezed the sets to one number per line). From 560 px everything fits on one line. */
+.xhist__row {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content max-content;
+  grid-template-areas:
+    'day totals marks load'
+    'sets sets sets sets';
+  align-items: baseline;
+  gap: 4px 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--panel);
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+.xhist__day { grid-area: day; white-space: nowrap; }
+.xhist__run { margin-left: 2px; color: var(--accent); font-size: 11px; }
+.xhist__sets { grid-area: sets; overflow-wrap: anywhere; }
+.xhist__sets.is-note { color: var(--muted); font-style: italic; }
+.xhist__totals { grid-area: totals; justify-self: end; text-align: right; }
+.xhist__marks { grid-area: marks; }
+.xhist__load { grid-area: load; white-space: nowrap; }
+.xhist__totals, .xhist__load { color: var(--muted); font-size: 14px; }
+.xhist__note { grid-column: 1 / -1; color: var(--muted); font-size: 14px; font-style: italic; }
+@media (min-width: 560px) {
+  .xhist__row {
+    grid-template-columns: max-content minmax(0, 1fr) max-content max-content max-content;
+    grid-template-areas: 'day sets totals marks load';
+  }
+  .xhist__totals { justify-self: start; text-align: left; white-space: nowrap; }
+  .xhist__note { grid-column: 2 / -1; }
+}

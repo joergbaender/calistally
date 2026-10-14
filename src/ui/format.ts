@@ -39,6 +39,12 @@ export function formatDay(date: string): string {
   return `${weekdayOf(date)} ${pad2(d.getDate())} ${MONTHS_SHORT[d.getMonth()] ?? ''}`;
 }
 
+/** formatDay, plus the year when `date` is not in the year of `today` ('Wed 07 Mar 2029'), so a
+ *  list without year headings never shows an old date as a recent one. */
+export function formatDayYear(date: string, today: string): string {
+  return date.slice(0, 4) === today.slice(0, 4) ? formatDay(date) : `${formatDay(date)} ${date.slice(0, 4)}`;
+}
+
 /** 'Thu 2030-03-07' */
 export function formatDayLong(date: string): string {
   return `${weekdayOf(date)} ${date}`;
