@@ -454,6 +454,18 @@ describe('Data meta, clock and dispose', () => {
     expect(cleared).toEqual([1, 2]);
   });
 
+  it('setClock refreshes now at once, so the first frame after a rate change is not stale', async () => {
+    let current = NOW;
+    const { data } = await makeData({ now: () => current, setInterval: () => 'tick', clearInterval: () => {} });
+    data.setClock('slow');
+    current = new Date('2030-03-04T11:00:59.000Z');
+    data.setClock('fast');
+    expect(data.now.value).toEqual(current);
+    current = new Date('2030-03-04T11:01:00.000Z');
+    data.setClock('off');
+    expect(data.now.value).toEqual(new Date('2030-03-04T11:00:59.000Z'));
+  });
+
   it('dispose clears the interval and unsubscribes from engine and channel', async () => {
     const cleared: unknown[] = [];
     const { data, engine, channel } = await makeData({ setInterval: () => 'tick', clearInterval: (id) => cleared.push(id) });

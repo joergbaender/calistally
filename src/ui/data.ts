@@ -227,6 +227,8 @@ export class Data {
       this.intervalId = undefined;
     }
     if (mode === 'off') return;
+    // A tab that was on the slow tick may hold a `now` up to a minute old: show the fresh one in the first frame.
+    this.now.value = this.clock();
     this.intervalId = this.startInterval(() => {
       this.now.value = this.clock();
     }, mode === 'fast' ? FAST_MS : SLOW_MS);
