@@ -670,6 +670,7 @@ describe('edits refuse a tombstoned session or block (a write no view would show
     expect(() => setSetFields(f, setId, { reps: 6 }, later)).toThrow(EditError);
     expect(() => deleteSet(f, setId, later)).toThrow(EditError);
     expect(() => addBlock(f, 'dips', later)).toThrow(EditError);
+    expect(() => setSessionFields(f, { notes: 'x' }, later)).toThrow(/session was deleted/);
     expect(() => setBlockNote(f, id, 'x', later)).toThrow(EditError);
     expect(() => deleteBlock(f, id, later)).toThrow(EditError);
     expect(() => moveBlock(f, id, 'down', later)).toThrow(EditError);

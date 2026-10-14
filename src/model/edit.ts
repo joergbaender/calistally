@@ -107,6 +107,7 @@ export function createPastSession(date: string, now: Date, id?: string): Session
 
 /** Touches the session only; `null` removes label / notes; `dateExact: true` removes dateUncertain. */
 export function setSessionFields(file: SessionFile, fields: SessionFields, now: Date): SessionFile {
+  requireLiveSession(file.session);
   const { label: _label, notes: _notes, dateUncertain, ...rest } = file.session;
   const label = fields.label === undefined ? file.session.label : fields.label === null ? undefined : fields.label;
   const notes = fields.notes === undefined ? file.session.notes : optionalText(fields.notes);

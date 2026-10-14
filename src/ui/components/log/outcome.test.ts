@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { EditError } from '../../../model/edit';
-import { sessionFile } from '../../../model/test-fixtures';
+import { EditError, setSessionFields } from '../../../model/edit';
+import { T0, session, sessionFile } from '../../../model/test-fixtures';
 import type { SessionFile } from '../../../model/types';
 import type { WriteOutcome } from '../../data';
 import { dismissToast, showToast, toast } from '../../toast';
@@ -107,6 +107,21 @@ describe('editSession', () => {
     });
     expect(result).toBe(false);
     expect(toast.value?.text).toBe('reps must be more than 0, got 0');
+  });
+
+  it('a session-field edit of a session deleted elsewhere becomes a toast and writes nothing', async () => {
+    let written = false;
+    const tombstoned = sessionFile(session([], { deletedAt: T0 }));
+    const data = {
+      edit<F>(_kind: string, _path: string, fn: (file: F) => F): Promise<WriteOutcome> {
+        fn(tombstoned as F);
+        written = true;
+        return Promise.resolve({ ok: true, heldBack: false });
+      },
+    };
+    expect(await editSession(data, '/s.json', (f) => setSessionFields(f, { notes: 'late' }, new Date('2030-01-01T11:00:00.000Z')))).toBe(false);
+    expect(toast.value?.text).toBe('the session was deleted');
+    expect(written).toBe(false);
   });
 
   it('any other error propagates', async () => {
