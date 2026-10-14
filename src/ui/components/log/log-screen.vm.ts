@@ -137,16 +137,18 @@ export function logScreenVm(input: LogScreenInput): LogScreenVm {
   const pairs = pairCards(today, reference);
   const cards = pairs.map((p) => cardOf(p, catalog.get(p.exerciseId), effectiveCurrent));
 
-  // The stop counts only while the set it was stopped after is still the latest: the next set
-  // (or deleting that one) runs the counter again with no write.
-  const latest = latestCompletedAt(today);
+  const index = cards.findIndex((c) => c.state === 'current');
+  const card = cards[index];
+  const pair = pairs[index];
+
+  // Session-wide (the real rest also when alternating exercises), hidden while the current block
+  // has no set yet. The stop counts only while the set it was stopped after is still the latest:
+  // the next set (or deleting that one) runs the counter again with no write.
+  const latest = card === undefined || card.todaySets.length === 0 ? undefined : latestCompletedAt(today);
   const stop = input.restStop !== undefined && input.restStop.after === latest ? input.restStop : undefined;
   const until = stop === undefined ? now.getTime() : Date.parse(stop.at);
   const counter = latest === undefined ? undefined : { text: formatClock(Math.max(0, (until - Date.parse(latest)) / 1000)), stopped: stop !== undefined };
 
-  const index = cards.findIndex((c) => c.state === 'current');
-  const card = cards[index];
-  const pair = pairs[index];
   let current: CurrentVm | undefined;
   if (card !== undefined && pair !== undefined && card.todayBlockId !== undefined) {
     const load = stickyLoad(pair.today, pair.reference, catalog.get(card.exerciseId));

@@ -230,6 +230,29 @@ describe('logScreenVm counter and current', () => {
     expect(vmOf(f.today, f.reference, { restStop: old }).counter).toEqual({ text: '17:00', stopped: false });
   });
 
+  it('is hidden while the current block has no set yet, also after another exercise’s sets', () => {
+    const f = fixture();
+    const fresh = block([], { exerciseId: 'diamond-push-ups', order: 2 });
+    const today: Session = { ...f.today, blocks: [f.todayDips, f.todayPush, fresh] };
+    const vm = vmOf(today, f.reference);
+    expect(vm.current?.blockId).toBe(fresh.id);
+    expect(vm.counter).toBeUndefined();
+    expect(vmOf(today, f.reference, { restStop: STOP }).counter).toBeUndefined();
+  });
+
+  it('shows again from the current block’s first set', () => {
+    const f = fixture();
+    const first = block([set({ reps: 20, completedAt: '2030-03-07T10:20:00.000Z' })], { exerciseId: 'diamond-push-ups', order: 2 });
+    const today: Session = { ...f.today, blocks: [f.todayDips, f.todayPush, first] };
+    expect(vmOf(today, f.reference).counter).toEqual({ text: '10:00', stopped: false });
+  });
+
+  it('a finished card made current shows the session-wide counter', () => {
+    const f = fixture();
+    // Dips (10:01–10:03) made current; the latest set of the session is the push-ups' at 10:13.
+    expect(vmOf(f.today, f.reference, { currentBlockId: f.todayDips.id }).counter).toEqual({ text: '17:00', stopped: false });
+  });
+
   it('builds the entry data from the current card', () => {
     const f = fixture();
     expect(vmOf(f.today, f.reference).current).toEqual({
