@@ -56,7 +56,7 @@ function OpenSession(p: { row: SessionRow }): JSX.Element {
   });
   return (
     <>
-      <LogScreen row={p.row} vm={vm} />
+      <LogScreen row={p.row} vm={vm} reference={reference} />
       {vm.current !== undefined && <EntryArea row={p.row} current={vm.current} />}
     </>
   );

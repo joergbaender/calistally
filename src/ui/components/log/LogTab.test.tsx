@@ -3,7 +3,7 @@ import { signal } from '@preact/signals';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/preact';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { block, exercise, exercisesFile, ladder, session, sessionFile } from '../../../model/test-fixtures';
+import { block, exercise, exercisesFile, ladder, session, sessionFile, timedSet } from '../../../model/test-fixtures';
 import type { FileKind, Session, SessionFile } from '../../../model/types';
 import { openDb } from '../../../sync/db';
 import { EXERCISES_PATH, sessionPath } from '../../../sync/paths';
@@ -182,6 +182,33 @@ describe('LogTab with an open session', () => {
     expect(currentBlockId.value).toBe(added?.id);
     await waitFor(() => expect(screen.getByRole('article', { name: 'Push-ups' }).className).toContain('log-card--current'));
     expect(screen.getByRole('article', { name: 'Dips (Bar)' }).className).toContain('log-card--finished');
+  });
+
+  it("flags a block with an unknown exercise or a metric mismatch under its name, today's or, on a not-started card, the reference's", async () => {
+    const past = session([block(ladder([5]), { exerciseId: 'gone' })], { date: '2030-03-05', startedAt: '2030-03-05T10:00:00.000Z' });
+    const today = session(
+      [
+        block(ladder([5], { completedAt: '2030-03-07T10:05:00.000Z' }), { exerciseId: 'nope', order: 0 }),
+        block([timedSet({ completedAt: '2030-03-07T10:10:00.000Z' })], { exerciseId: 'pull-ups', order: 1 }),
+        block(ladder([8], { completedAt: '2030-03-07T10:20:00.000Z' }), { exerciseId: 'dips-bar', order: 2 }),
+      ],
+      { date: '2030-03-07', startedAt: '2030-03-07T10:00:00.000Z' },
+    );
+    await mount([past, today], { [`reference:${today.id}`]: past.id });
+    await waitFor(() => expect(screen.getByRole('article', { name: 'nope' })).toBeTruthy());
+    const flagsOf = (name: string): string[] =>
+      within(screen.getByRole('article', { name })).queryAllByText(/^(unknown exercise|metric mismatch)$/).map((e) => e.textContent ?? '');
+    expect(flagsOf('nope')).toEqual(['unknown exercise']);
+    expect(flagsOf('Pull-ups')).toEqual(['metric mismatch']);
+    expect(flagsOf('Dips (Bar)')).toEqual([]);
+    // The reference's block of an unknown exercise, not started today: the Sync tab lists it too.
+    expect(flagsOf('gone')).toEqual(['unknown exercise']);
+    // Under the name: after the heading, not inside it.
+    const card = screen.getByRole('article', { name: 'nope' });
+    const heading = within(card).getByRole('heading', { name: 'nope' });
+    const flag = within(card).getByText('unknown exercise');
+    expect(heading.contains(flag)).toBe(false);
+    expect(heading.compareDocumentPosition(flag) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('a double tap on Start adds one block', async () => {

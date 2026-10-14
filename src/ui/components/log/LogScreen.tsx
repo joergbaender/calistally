@@ -1,8 +1,10 @@
 import { useSignal } from '@preact/signals';
 import type { JSX } from 'preact';
 import { addBlock, findBlock } from '../../../model/edit';
+import type { Session } from '../../../model/types';
 import { useApp } from '../../context';
 import type { SessionRow } from '../../data';
+import { blockFlags } from '../../soft-flags';
 import { Button, Marks, SetChips } from '../shared';
 import type { CardVm, LogScreenVm } from './log-screen.vm';
 import { currentBlockId } from './log-state';
@@ -19,8 +21,9 @@ type Open =
   | { kind: 'block'; blockId: string; name: string }
   | { kind: 'search' };
 
-/** Spec 4 §4 "The screen": header, cards, Other exercise…, Done. The entry area is rendered by LogTab. */
-export function LogScreen(p: { row: SessionRow; vm: LogScreenVm }): JSX.Element {
+/** Spec 4 §4 "The screen": header, cards, Other exercise…, Done. The entry area is rendered by LogTab.
+ *  `reference` is the session the cards compare against (for the soft-issue flags of its blocks). */
+export function LogScreen(p: { row: SessionRow; vm: LogScreenVm; reference?: Session | undefined }): JSX.Element {
   const { data, router } = useApp();
   const open = useSignal<Open | undefined>(undefined);
   const close = (): void => {
@@ -47,6 +50,15 @@ export function LogScreen(p: { row: SessionRow; vm: LogScreenVm }): JSX.Element 
       return added;
     });
 
+  // The soft issues the Sync tab lists (none without a catalog, as there), on the block they name:
+  // today's block of the card, else (a not-started card) the reference's block.
+  const noFlags = new Map<string, string[]>();
+  const catalogHere = data.catalog.value !== undefined;
+  const flags = catalogHere ? blockFlags(p.row.file.session, data.exercises.value) : noFlags;
+  const refFlags = catalogHere && p.reference !== undefined ? blockFlags(p.reference, data.exercises.value) : noFlags;
+  const flagsOf = (c: CardVm): string[] =>
+    (c.todayBlockId !== undefined ? flags.get(c.todayBlockId) : c.referenceBlockId !== undefined ? refFlags.get(c.referenceBlockId) : undefined) ?? [];
+
   const sheet = open.value;
   return (
     <section class="log">
@@ -70,6 +82,7 @@ export function LogScreen(p: { row: SessionRow; vm: LogScreenVm }): JSX.Element 
           key={c.key}
           card={c}
           counter={p.vm.counter}
+          flags={flagsOf(c)}
           starting={guard.held()}
           onStart={() => void startBlock(c.exerciseId)}
           onTapSet={(setId) => (open.value = { kind: 'set', setId })}
@@ -93,6 +106,8 @@ export function LogScreen(p: { row: SessionRow; vm: LogScreenVm }): JSX.Element 
 function Card(p: {
   card: CardVm;
   counter: string | undefined;
+  /** Soft-issue flags of the card's block (soft-flags.ts): today's, else the reference's; shown under its name. */
+  flags: readonly string[];
   /** A Start is running or waiting for its block to show: every Start is disabled. */
   starting: boolean;
   onStart(): void;
@@ -137,6 +152,13 @@ function Card(p: {
         </h3>
         {started ? <span class="log-card__load">{c.loadText}</span> : <Button kind="primary" disabled={p.starting} onClick={p.onStart}>Start</Button>}
       </div>
+      {p.flags.length > 0 && (
+        <p class="log-card__flags">
+          {p.flags.map((f) => (
+            <span key={f} class="flag">{f}</span>
+          ))}
+        </p>
+      )}
       <div class="log-card__body" onClick={makeCurrent}>
         {started && (
           <>

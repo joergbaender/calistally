@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/preact';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setSessionFields } from '../../../model/edit';
-import { block, exercise, ladder, session, set, sessionFile, T0 } from '../../../model/test-fixtures';
+import { block, exercise, ladder, session, set, sessionFile, T0, timedSet } from '../../../model/test-fixtures';
 import type { Session } from '../../../model/types';
 import { formatAmount, formatDayLong } from '../../format';
 import { dismissToast, toast } from '../../toast';
@@ -599,5 +599,37 @@ describe('SessionHeaderSheet', () => {
     fireEvent.click(within(sheet).getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(toast.value?.text).toBe('Enter a date'));
     expect(writes).not.toHaveBeenCalled();
+  });
+});
+
+describe('SessionPage soft-issue flags', () => {
+  it('flags a block with an unknown exercise or a metric mismatch under its name, as the Sync tab names it', async () => {
+    const s = session(
+      [
+        block(ladder([5]), { exerciseId: 'nope', order: 0 }),
+        block([timedSet()], { exerciseId: 'pull-ups', order: 1 }),
+        block(ladder([12]), { exerciseId: 'dips-bar', order: 2 }),
+      ],
+      { date: '2030-03-07' },
+    );
+    await mount(s);
+    await waitFor(() => expect(article('nope')).toBeTruthy());
+    const flagsOf = (name: string): string[] => within(article(name)).queryAllByText(/^(unknown exercise|metric mismatch)$/).map((e) => e.textContent ?? '');
+    expect(flagsOf('nope')).toEqual(['unknown exercise']);
+    expect(flagsOf('Pull-ups')).toEqual(['metric mismatch']);
+    expect(flagsOf('Dips (Bar)')).toEqual([]);
+    // Under the name: after the heading, not inside it.
+    const heading = within(article('nope')).getByRole('heading', { name: /nope/ });
+    const flag = within(article('nope')).getByText('unknown exercise');
+    expect(heading.contains(flag)).toBe(false);
+    expect(heading.compareDocumentPosition(flag) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('flags no block without a catalog (the Sync tab lists no soft issue then)', async () => {
+    const s = session([block(ladder([5]), { exerciseId: 'nope' })], { date: '2030-03-07' });
+    const m = await setup({ now: NOW, sessions: [s] });
+    renderIn(m.deps, <SessionPage sessionId={s.id} />);
+    await waitFor(() => expect(article('nope')).toBeTruthy());
+    expect(screen.queryByText(/^(unknown exercise|metric mismatch)$/)).toBeNull();
   });
 });

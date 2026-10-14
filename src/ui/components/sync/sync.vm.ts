@@ -77,8 +77,8 @@ const CARD_TEXT: Record<IssueReason, { title: string; advice: string }> = {
   'push-error': { title: 'Upload failed', advice: 'Retried automatically on the next sync.' },
 };
 
-// The session page does not flag blocks yet, so the advice does not claim it does.
-const SOFT_ADVICE = 'Nothing is blocked; open the session to fix the block.';
+// Spec 4 §7: the session page flags the block the card names (src/ui/soft-flags.ts).
+const SOFT_ADVICE = 'Nothing is blocked; the block carries the same flag on the session page.';
 
 function when(iso: string | undefined): string {
   if (iso === undefined) return 'never';

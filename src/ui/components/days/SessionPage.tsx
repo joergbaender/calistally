@@ -8,6 +8,7 @@ import type { FileRow } from '../../../sync/store';
 import { useApp } from '../../context';
 import { sessionRowById, type SessionRow } from '../../data';
 import { lockedSessionRows } from '../../locked';
+import { blockFlags } from '../../soft-flags';
 import { showToast } from '../../toast';
 import { BackBar, Button, Marks, SetChips, Sheet, useBusy } from '../shared';
 import { BlockSheet } from '../log/BlockSheet';
@@ -80,6 +81,8 @@ export function SessionPage(p: { sessionId: string }): JSX.Element {
   // Edit controls only on an ok row of a live session (spec 4 §5 "Refused rows").
   const editable = row !== undefined && !vm.deleted ? row : undefined;
   const setsById = new Map<string, WorkoutSet>(liveBlocks(session).flatMap(liveSets).map((s) => [s.id, s]));
+  // The soft issues the Sync tab lists (none without a catalog, as there), on the block they name.
+  const flags = data.catalog.value === undefined ? new Map<string, string[]>() : blockFlags(session, data.exercises.value);
 
   const removeTag = (r: SessionRow, tag: string): void => {
     const now = data.clock();
@@ -166,6 +169,7 @@ export function SessionPage(p: { sessionId: string }): JSX.Element {
           key={b.blockId}
           block={b}
           setsById={setsById}
+          flags={flags.get(b.blockId) ?? []}
           editable={editable !== undefined}
           provisional={data.openSession.value?.file.session.id === session.id}
           onName={() => router.navigate({ tab: 'more', page: 'exercise', id: b.exerciseId })}
@@ -198,6 +202,8 @@ export function SessionPage(p: { sessionId: string }): JSX.Element {
 function BlockView(p: {
   block: BlockRow;
   setsById: ReadonlyMap<string, WorkoutSet>;
+  /** Soft-issue flags of the block (soft-flags.ts), shown under its name. */
+  flags: readonly string[];
   editable: boolean;
   /** The open session's marks are dimmed until it closes (spec 4 §4, §14). */
   provisional: boolean;
@@ -213,13 +219,19 @@ function BlockView(p: {
         <h3 class="session-block__name">
           <button type="button" class="session-block__namebtn" onClick={p.onName}>{b.name}</button>
           {b.archived && <span class="session-block__flag">archived</span>}
-          {b.unknownExercise && <span class="session-block__flag">not in the catalog</span>}
         </h3>
         {b.load !== undefined && <span class="session-block__load">{b.load}</span>}
         {p.editable && (
           <button type="button" class="session-block__options" aria-label="Block options" onClick={p.onOptions}>⋯</button>
         )}
       </div>
+      {p.flags.length > 0 && (
+        <p class="session-block__flags">
+          {p.flags.map((f) => (
+            <span key={f} class="flag">{f}</span>
+          ))}
+        </p>
+      )}
       {b.note !== undefined && <p class="session-block__note">{b.note}</p>}
       {b.noteOnly ? (
         <p class="session-block__empty">no sets recorded</p>
