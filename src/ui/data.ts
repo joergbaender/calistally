@@ -206,7 +206,7 @@ export class Data {
   }
 
   /** Create a file that does not exist yet (expectedVersion 0). */
-  async create(kind: FileKind, path: string, file: unknown): Promise<WriteOutcome> {
+  async create<K extends FileKind>(kind: K, path: string, file: FileOf<K>): Promise<WriteOutcome> {
     return outcomeOf(await this.store.writeFile(kind, path, file, this.clock(), 0));
   }
 
