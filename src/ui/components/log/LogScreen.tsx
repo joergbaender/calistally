@@ -53,19 +53,20 @@ export function LogScreen(p: { row: SessionRow; vm: LogScreenVm; reference?: Ses
 
   // Spec 4 §4: a tap stops the rest counter after the latest set, a tap on a stopped one resumes it.
   // A device-local meta write only (no data file, so no write guard): the signal first, then meta.
+  // The signal holds the state, so a failed meta write only loses it across a reload: no toast.
   const toggleCounter = (): void => {
     const session = p.row.file.session;
     const key = `restStop:${session.id}`;
     if (p.vm.counter?.stopped === true) {
       restStop.value = undefined;
-      void data.setMeta(key, undefined);
+      data.setMeta(key, undefined).catch(() => {});
       return;
     }
     const after = latestCompletedAt(session);
     if (after === undefined) return;
     const stop: RestStop = { after, at: data.clock().toISOString() };
     restStop.value = { sessionId: session.id, ...stop };
-    void data.setMeta(key, stop);
+    data.setMeta(key, stop).catch(() => {});
   };
 
   // The soft issues the Sync tab lists (none without a catalog, as there), on the block they name:
@@ -214,7 +215,7 @@ function Card(p: {
                 <button
                   type="button"
                   class={`log-card__counter${p.counter.stopped ? ' is-stopped' : ''}`}
-                  aria-label={p.counter.stopped ? 'Rest taken, tap to resume' : 'Rest since the last set, tap to stop'}
+                  aria-label={p.counter.stopped ? `Rest taken ${p.counter.text}, tap to resume` : `Rest ${p.counter.text} since the last set, tap to stop`}
                   onClick={p.onTapCounter}
                 >
                   {p.counter.text}

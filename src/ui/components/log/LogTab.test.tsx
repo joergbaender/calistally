@@ -412,9 +412,10 @@ describe('LogTab with an open session', () => {
   });
 
   describe('the rest counter', () => {
-    const RUNNING = 'Rest since the last set, tap to stop';
-    const STOPPED = 'Rest taken, tap to resume';
-    const counter = (name: string): HTMLElement => screen.getByRole('button', { name });
+    // The time is part of the button's name (a screen reader never sees its text otherwise).
+    const RUNNING = /^Rest \d+:\d\d since the last set, tap to stop$/;
+    const STOPPED = /^Rest taken \d+:\d\d, tap to resume$/;
+    const counter = (name: RegExp): HTMLElement => screen.getByRole('button', { name });
     // openToday's two dips sets completed at 10:20; the clock and the now signal start at 10:30.
     const AFTER = '2030-03-07T10:20:00.000Z';
 
@@ -450,6 +451,30 @@ describe('LogTab with an open session', () => {
       await waitFor(async () => expect((await fileOf(store, today)).session.blocks[0]?.sets).toHaveLength(3));
       act(() => { data.now.value = new Date('2030-03-07T10:33:00.000Z'); });
       await waitFor(() => expect(counter(RUNNING).textContent).toBe('1:00'));
+    });
+
+    it('names the time: running "Rest 10:00 since the last set, tap to stop", stopped "Rest taken 10:00, tap to resume"', async () => {
+      await mount([openToday()]);
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Rest 10:00 since the last set, tap to stop' })).toBeTruthy());
+      fireEvent.click(counter(RUNNING));
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Rest taken 10:00, tap to resume' })).toBeTruthy());
+    });
+
+    // A stored value of the wrong shape reads as running, like a failed read: the cards still render.
+    it.each([
+      ['null', null],
+      ['a number', 7],
+      ['a string', 'stopped'],
+      ['an object without at', { after: '2030-03-07T10:20:00.000Z' }],
+      ['an object whose at is not a timestamp', { after: '2030-03-07T10:20:00.000Z', at: 'soon' }],
+      ['an object whose after is not a timestamp', { after: 'later', at: '2030-03-07T10:30:00.000Z' }],
+      ['an object with a non-string at', { after: '2030-03-07T10:20:00.000Z', at: 12 }],
+    ])('a stored stop that is %s leaves the counter running', async (_name, stored) => {
+      const today = openToday();
+      await mount([today], { [`restStop:${today.id}`]: stored });
+      await waitFor(() => expect(counter(RUNNING).textContent).toBe('10:00'));
+      expect(document.querySelectorAll('.log-card')).toHaveLength(1);
+      expect(document.querySelector('[aria-busy]')).toBeNull();
     });
 
     it('a remount shows the stop frozen: at once after a tab switch, from meta after a reload', async () => {

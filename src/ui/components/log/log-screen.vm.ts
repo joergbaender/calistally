@@ -58,6 +58,15 @@ export interface RestStop {
   at: string;
 }
 
+/** A stored `restStop:` value is device-local but unchecked: only an object with two parsable
+ *  timestamps counts; anything else reads as running (no stop). */
+export function readRestStop(value: unknown): RestStop | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const { after, at } = value as Partial<Record<keyof RestStop, unknown>>;
+  if (typeof after !== 'string' || typeof at !== 'string') return undefined;
+  return Number.isFinite(Date.parse(after)) && Number.isFinite(Date.parse(at)) ? { after, at } : undefined;
+}
+
 export interface LogScreenVm {
   header: { date: string; startedAt: string; reference: string | undefined; offline: boolean };
   cards: CardVm[];

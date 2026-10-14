@@ -3,7 +3,7 @@ import { useEffect } from 'preact/hooks';
 import { useApp } from '../../context';
 import type { SessionRow } from '../../data';
 import { EntryArea } from './EntryArea';
-import { logScreenVm, resolveReference, type RestStop } from './log-screen.vm';
+import { logScreenVm, readRestStop, resolveReference } from './log-screen.vm';
 import { currentBlockId, referenceId, referenceLoadedFor, restStop } from './log-state';
 import { LogScreen } from './LogScreen';
 import { StartPicker } from './StartPicker';
@@ -31,13 +31,20 @@ function OpenSession(p: { row: SessionRow }): JSX.Element {
     referenceId.value = undefined;
     restStop.value = undefined;
     const read = <T,>(key: string): Promise<T | undefined> => data.getMeta<T>(key).catch(() => undefined);
-    void Promise.all([read<string>(`reference:${id}`), read<RestStop>(`restStop:${id}`)]).then(([reference, stop]) => {
-      if (!live) return;
-      referenceId.value = reference;
-      // A resume stores undefined under the key (the meta store has no delete): read as running.
-      restStop.value = stop === undefined ? undefined : { sessionId: id, after: stop.after, at: stop.at };
-      referenceLoadedFor.value = id;
-    });
+    void Promise.all([read<string>(`reference:${id}`), read<unknown>(`restStop:${id}`)])
+      .then(([reference, stored]) => {
+        if (!live) return;
+        referenceId.value = reference;
+        // A resume stores undefined under the key (the meta store has no delete), and a value of the
+        // wrong shape is no stop either: both read as running.
+        const stop = readRestStop(stored);
+        restStop.value = stop === undefined ? undefined : { sessionId: id, ...stop };
+      })
+      // Whatever went wrong above, the session must still show: no stored choice, no stop.
+      .catch(() => {})
+      .finally(() => {
+        if (live) referenceLoadedFor.value = id;
+      });
     return () => {
       live = false;
     };
