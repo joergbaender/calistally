@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { block, bodyweight, bodyweightFile, exercise, exercisesFile, ladder, session, sessionFile } from '../model/test-fixtures';
 import { BODYWEIGHT_PATH, EXERCISES_PATH } from '../sync/paths';
 import type { FileRow } from '../sync/store';
-import { lockedSessionRows, lockedSessionsOf, readOnlyBodyweight, readOnlyCatalog } from './locked';
+import { lockedSessionRows, lockedSessionsOf, readOnlyBodyweight, readOnlyCatalog, sessionsWithLocked } from './locked';
 
 describe('readOnlyCatalog and readOnlyBodyweight', () => {
   const catalogRow = (content: unknown, over: Partial<FileRow> = {}): FileRow => ({
@@ -29,6 +29,19 @@ describe('readOnlyCatalog and readOnlyBodyweight', () => {
     expect(readOnlyCatalog([])).toBeUndefined();
     expect(readOnlyBodyweight([bodyRow({ schemaVersion: 1, entries: [{ id: 'x' }] })])).toBeUndefined();
     expect(readOnlyBodyweight([bodyRow(bodyweightFile([bodyweight()]), { status: 'quarantined' })])).toBeUndefined();
+  });
+});
+
+describe('sessionsWithLocked', () => {
+  it('adds the locked sessions to the live ones, leaving out ids an ok row holds', () => {
+    const live = session([block(ladder([5]))], { date: '2030-03-04' });
+    const locked = session([block(ladder([6]))], { date: '2030-03-05' });
+    const shadow = session([block(ladder([7]))], { id: live.id, date: '2030-03-04' });
+    const rows = [
+      row(sessionFile(locked), { status: 'read-only' }),
+      row(sessionFile(shadow), { path: '/sessions/2030/2030-03-04_other.json', status: 'needs-update' }),
+    ];
+    expect(sessionsWithLocked([live], rows, new Set([live.id]))).toEqual([live, locked]);
   });
 });
 

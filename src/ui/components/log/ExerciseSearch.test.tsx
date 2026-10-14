@@ -122,6 +122,32 @@ describe('ExerciseSearch', () => {
     expect(catalog.find((e) => e.id === 'kipping-pull-ups')).toMatchObject({ archived: false, updatedAt: NOW.toISOString() });
   });
 
+  it('Create on an archived name with another metric writes nothing and asks; Cancel keeps the form, Use it adds the existing entry', async () => {
+    const today = openToday();
+    const { store, sheet } = await mount(today, [PUSH, PULL, OLD]);
+    const writes = vi.spyOn(store, 'writeFile');
+    search(sheet, 'Kipping Pull-ups');
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Create “Kipping Pull-ups”' }));
+    const form = screen.getByRole('dialog', { name: 'New exercise' });
+    fireEvent.change(within(form).getByRole('combobox', { name: 'Metric' }), { target: { value: 'seconds' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Create exercise' }));
+
+    const clash = await screen.findByRole('dialog', { name: 'An exercise named “Kipping Pull-ups” exists' });
+    expect(within(clash).getByText('It is archived, measured in reps, not seconds. Use it as it is, or cancel and pick another name for the new one.')).toBeTruthy();
+    expect(writes).not.toHaveBeenCalled();
+    fireEvent.click(within(clash).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /exists/ })).toBeNull());
+    const again = screen.getByRole('dialog', { name: 'New exercise' });
+    expect((within(again).getByRole('combobox', { name: 'Metric' }) as HTMLSelectElement).value).toBe('seconds');
+
+    fireEvent.click(within(again).getByRole('button', { name: 'Create exercise' }));
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'An exercise named “Kipping Pull-ups” exists' })).getByRole('button', { name: 'Use it' }));
+    await waitFor(async () => expect((await fileAt(store, pathOf(today))).session.blocks.map((b) => b.exerciseId)).toEqual(['kipping-pull-ups']));
+    const catalog = ((await store.getRow(EXERCISES_PATH))?.content as ExercisesFile).exercises;
+    expect(catalog.find((e) => e.id === 'kipping-pull-ups')).toMatchObject({ archived: false, metric: 'reps' });
+    expect(catalog).toHaveLength(3);
+  });
+
   it("a held-back catalog write keeps its note when the session write shows a toast of its own", async () => {
     const today = openToday();
     const { data, sheet } = await mount(today, [PUSH, PULL]);

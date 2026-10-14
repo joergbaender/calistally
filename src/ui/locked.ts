@@ -50,6 +50,16 @@ export function lockedSessionsOf(rows: readonly FileRow[], okSessionIds: Readonl
   return lockedSessionRows(rows, okSessionIds).map((l) => l.session);
 }
 
+/**
+ * The readable live sessions plus the locked ones (the Days list's set), for every check that must
+ * see all non-deleted blocks: spec 1 §3 "an exercise referenced by any non-deleted block cannot be
+ * tombstoned" holds for a session on a read-only, needs-update or quarantined row too.
+ * `okSessionIds` are the ids of every ok session row, tombstoned ones included.
+ */
+export function sessionsWithLocked(live: readonly Session[], rows: readonly FileRow[], okSessionIds: ReadonlySet<string>): Session[] {
+  return [...live, ...lockedSessionsOf(rows, okSessionIds)];
+}
+
 /** The refused row at `path` when it is only locked for writing (read-only, needs-update: written by
  *  a newer app, read leniently, spec 1/3), never a quarantined file or a duplicate loser. */
 function lockedRowAt(rows: readonly FileRow[], path: string): FileRow | undefined {

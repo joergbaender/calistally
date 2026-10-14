@@ -70,6 +70,11 @@ describe('MoreTab', () => {
     }
   });
 
+  it('the catalog route with an id shows the exercise edit page', async () => {
+    await mount('#/more/catalog/pull-ups');
+    expect((screen.getByRole('textbox', { name: 'Name' }) as HTMLInputElement).value).toBe('Pull-ups');
+  });
+
   it('the exercise route without an id shows the exercise list', async () => {
     await mount('#/more/exercise');
     expect(screen.getByRole('button', { name: /Pull-ups/ }).textContent).toContain(formatDay('2030-03-04'));

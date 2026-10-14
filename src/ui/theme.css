@@ -785,3 +785,49 @@ span.session-head__tag { display: inline-flex; align-items: center; min-height: 
 }
 .bw-sheet__problem { margin: 0; color: var(--danger); }
 .bw-sheet__actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* ---- .catalog, .catalog-edit (components/more/CatalogPage, ExerciseEditPage) ---- */
+.catalog__banner { margin: 0; padding: 8px 12px; border-radius: 10px; background: var(--panel); border-left: 3px solid var(--danger); }
+.catalog__actions { display: flex; justify-content: flex-end; }
+.catalog__group { margin-top: 8px; }
+.catalog__family { margin: 0 0 4px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.catalog__rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.catalog-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--panel);
+  text-align: left;
+}
+.catalog-row__meta { color: var(--muted); font-size: 13px; }
+.catalog__group--archived .catalog-row__name { color: var(--muted); }
+.catalog-edit__cues {
+  width: 100%;
+  min-height: 88px;
+  padding: 8px 12px;
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  resize: vertical;
+}
+.catalog-edit__locked { padding: 8px 12px; border: 1px dashed var(--outline); border-radius: 10px; }
+.catalog-edit__fixed { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; }
+.catalog-edit__fixed dt { color: var(--muted); }
+.catalog-edit__fixed dd { margin: 0; }
+.catalog-edit__note, .catalog-edit__reason { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+/* shared/ClashSheet: why the name is taken and what "Use it" does. */
+.clash__detail { margin: 0 0 8px; color: var(--muted); }
+/* A deleted exercise's fields are read-only until Restore. */
+.exform__field :disabled { opacity: 0.7; }
+.catalog-edit__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.catalog-edit__actions .btn--primary { margin-right: auto; }
+.catalog-edit__deleted { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--muted); }
