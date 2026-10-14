@@ -23,7 +23,7 @@ describe('theme tokens', () => {
 
   it('theme.css defines every token of spec 4 §8', () => {
     const css = readFileSync(join(UI_DIR, 'theme.css'), 'utf8');
-    for (const token of ['--bg', '--panel', '--panel-2', '--text', '--muted', '--accent', '--ok', '--danger', '--outline', '--on-accent']) {
+    for (const token of ['--bg', '--panel', '--panel-2', '--text', '--muted', '--accent', '--ok', '--danger', '--outline', '--on-accent', '--chip-push', '--chip-pull', '--chip-legs', '--chip-other']) {
       expect(css, token).toMatch(new RegExp(`${token}\\s*:`));
     }
   });
