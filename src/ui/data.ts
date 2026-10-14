@@ -7,6 +7,7 @@ import type { SyncStatus } from '../sync/engine';
 import { canonicalJson } from '../sync/merge';
 import { BODYWEIGHT_PATH, EXERCISES_PATH } from '../sync/paths';
 import type { FileRow, Issue, QueueRow, Store, WriteRefusal, WriteResult } from '../sync/store';
+import { showToast } from './toast';
 
 /** Spec 4 §3 "Signals over the store": one signal per slice, everything derived is a computed. */
 
@@ -31,6 +32,8 @@ export interface DataDeps {
 const FAST_MS = 1000;
 const SLOW_MS = 60000;
 
+export const RELOAD_FAILED_TEXT = "Couldn't reload the data; reopen the app";
+
 /** Before the engine reports: nothing known, not connected. */
 const NO_STATUS: SyncStatus = { phase: 'idle', online: true, connected: false, queueLength: 0, heldBackCount: 0, issues: [], tooNewSeen: false, emptyFolder: false };
 
@@ -46,6 +49,19 @@ function refusalOf(row: FileRow): WriteRefusal | undefined {
 
 function outcomeOf(result: WriteResult): WriteOutcome {
   return result.ok ? { ok: true, heldBack: result.heldBack !== undefined } : result;
+}
+
+/** Run `run`; on a rejection run it once more, and call `onFail` if that rejects too. Never rejects itself. */
+async function retryOnce(run: () => Promise<void>, onFail?: () => void): Promise<void> {
+  try {
+    await run();
+  } catch {
+    try {
+      await run();
+    } catch {
+      onFail?.();
+    }
+  }
 }
 
 export class Data {
@@ -153,12 +169,12 @@ export class Data {
             this.statusAt.value = this.clock();
             this.status.value = { ...s };
           });
-          void this.reloadIssues();
+          this.reloadIssuesInBackground();
         }),
       );
     }
     if (this.channel !== undefined) {
-      this.unsubscribers.push(this.channel.subscribe((path) => void this.refresh(path)));
+      this.unsubscribers.push(this.channel.subscribe((path) => this.refreshInBackground(path)));
     }
   }
 
@@ -178,6 +194,15 @@ export class Data {
     this.refusedRows.value = row !== undefined && !readable ? [...refusedOthers, row] : refusedOthers;
     this.queue.value = await this.store.queue();
     this.issues.value = await this.store.issues();
+  }
+
+  /**
+   * `refresh` for the callers that cannot await it (the store's onChange, the channel): a rejection is
+   * retried once, and a second one says so, because the screen may show stale data after a write that
+   * landed (spec 4 §8; on iOS the IndexedDB connection can drop in the background).
+   */
+  refreshInBackground(path: string): void {
+    void retryOnce(() => this.refresh(path), () => showToast(RELOAD_FAILED_TEXT));
   }
 
   /** Create a file that does not exist yet (expectedVersion 0). */
@@ -240,6 +265,11 @@ export class Data {
     this.unsubscribers = [];
   }
 
+  /** Retried once, then quiet: the issues and the queue are diagnostic (the Sync tab), not worth a toast. */
+  private reloadIssuesInBackground(): void {
+    void retryOnce(() => this.reloadIssues());
+  }
+
   private async reloadIssues(): Promise<void> {
     this.queue.value = await this.store.queue();
     this.issues.value = await this.store.issues();
@@ -251,12 +281,12 @@ export class Data {
  * delivers to the posting tab, so this tab's Data refreshes directly. The store is built before Data,
  * so Data binds late; a change before `bind` only reaches the channel (`Data.load` reads everything).
  */
-export function storeChanges(channel: Pick<ChangeChannel, 'post'> | undefined): { onChange(path: string): void; bind(data: Pick<Data, 'refresh'>): void } {
-  let bound: Pick<Data, 'refresh'> | undefined;
+export function storeChanges(channel: Pick<ChangeChannel, 'post'> | undefined): { onChange(path: string): void; bind(data: Pick<Data, 'refreshInBackground'>): void } {
+  let bound: Pick<Data, 'refreshInBackground'> | undefined;
   return {
     onChange(path) {
       channel?.post(path);
-      void bound?.refresh(path);
+      bound?.refreshInBackground(path);
     },
     bind(data) {
       bound = data;
