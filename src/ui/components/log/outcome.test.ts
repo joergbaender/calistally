@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { EditError } from '../../../model/edit';
-import { sessionFile } from '../../../model/test-fixtures';
+import { EditError, setSessionFields } from '../../../model/edit';
+import { T0, session, sessionFile } from '../../../model/test-fixtures';
 import type { SessionFile } from '../../../model/types';
 import type { WriteOutcome } from '../../data';
 import { dismissToast, showToast, toast } from '../../toast';
-import { editSession, editSessionQuiet, HELD_BACK_TEXT, quietOutcome, reportOutcome, showHeldBack } from './outcome';
+import { editSession, editSessionQuiet, HELD_BACK_TEXT, quietOutcome, quietWrite, reportOutcome, reportWrite, showHeldBack } from './outcome';
 
 afterEach(() => dismissToast());
 
@@ -109,9 +109,48 @@ describe('editSession', () => {
     expect(toast.value?.text).toBe('reps must be more than 0, got 0');
   });
 
+  it('a session-field edit of a session deleted elsewhere becomes a toast and writes nothing', async () => {
+    let written = false;
+    const tombstoned = sessionFile(session([], { deletedAt: T0 }));
+    const data = {
+      edit<F>(_kind: string, _path: string, fn: (file: F) => F): Promise<WriteOutcome> {
+        fn(tombstoned as F);
+        written = true;
+        return Promise.resolve({ ok: true, heldBack: false });
+      },
+    };
+    expect(await editSession(data, '/s.json', (f) => setSessionFields(f, { notes: 'late' }, new Date('2030-01-01T11:00:00.000Z')))).toBe(false);
+    expect(toast.value?.text).toBe('the session was deleted');
+    expect(written).toBe(false);
+  });
+
   it('any other error propagates', async () => {
     await expect(editSession(fakeData({ ok: true, heldBack: false }), '/s.json', () => {
       throw new TypeError('bug');
     })).rejects.toThrow('bug');
+  });
+});
+
+describe('quietWrite and reportWrite (any file kind: Data.create or Data.edit)', () => {
+  it('quietWrite returns the owed note, names a refusal, and turns an EditError into a toast', async () => {
+    expect(await quietWrite('/qw.json', () => Promise.resolve({ ok: true, heldBack: true }))).toEqual({ ok: true, heldBackNote: true });
+    expect(toast.value).toBeUndefined();
+    expect(await quietWrite('/qw.json', () => Promise.resolve({ ok: false, reason: 'missing' }))).toEqual({ ok: false });
+    expect(toast.value?.text).toBe('This session no longer exists');
+    expect(await quietWrite('/qw.json', () => Promise.reject(new EditError('bodyweight must be more than 0 kg, got 0')))).toEqual({ ok: false });
+    expect(toast.value?.text).toBe('bodyweight must be more than 0 kg, got 0');
+    await expect(quietWrite('/qw.json', () => Promise.reject(new TypeError('bug')))).rejects.toThrow('bug');
+  });
+
+  it('reportWrite shows the held-back note itself and returns whether the write went through', async () => {
+    expect(await reportWrite('/rw.json', () => Promise.resolve({ ok: true, heldBack: true }))).toBe(true);
+    expect(toast.value?.text).toBe(HELD_BACK_TEXT);
+    dismissToast();
+    expect(await reportWrite('/rw.json', () => Promise.resolve({ ok: false, reason: 'changed' }))).toBe(false);
+    expect(toast.value?.text).toBe('Changed elsewhere, try again');
+    expect(await reportWrite('/rw.json', () => {
+      throw new EditError('not a calendar date: 2030-02-30');
+    })).toBe(false);
+    expect(toast.value?.text).toBe('not a calendar date: 2030-02-30');
   });
 });

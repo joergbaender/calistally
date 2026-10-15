@@ -11,6 +11,11 @@
   --danger: #f87171;
   --outline: #374151;
   --on-accent: #111111;
+  /* Calendar dots by chip (spec 4 §6); legs gets its own colour so it never reads as an error. */
+  --chip-push: var(--accent);
+  --chip-pull: var(--ok);
+  --chip-legs: #60a5fa;
+  --chip-other: var(--muted);
 }
 
 /* ---- base ---- */
@@ -408,7 +413,21 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .log-card__caption { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
 .log-card__note { margin: 0; color: var(--muted); font-style: italic; overflow-wrap: anywhere; }
 .log-card__totals { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
-.log-card__counter { margin-left: auto; color: var(--accent); font-weight: 600; }
+/* A tap stops the counter (spec 4 §4); stopped, it is muted and outlined. */
+.log-card__counter {
+  min-width: 44px;
+  min-height: 44px;
+  margin-left: auto;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--accent);
+  font-size: inherit;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.log-card__counter.is-stopped { border-color: var(--muted); color: var(--muted); }
 .log-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 4px 0 12px; }
 
 /* ---- .entry (components/log/EntryArea) ---- */
@@ -656,3 +675,237 @@ span.session-head__tag { display: inline-flex; align-items: center; min-height: 
 .sessionsheet__switch input { width: 22px; height: 22px; accent-color: var(--accent); }
 .tagsheet__seen { display: flex; flex-wrap: wrap; gap: 6px; }
 .setsheet__aggregate { margin: 0; color: var(--muted); }
+
+/* ---- .more-menu, .more-page (components/more) ---- */
+.more-menu { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; }
+.more-menu__title { margin: 0 0 4px; font-size: 22px; }
+.more-menu__item {
+  min-height: 52px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--panel);
+  text-align: left;
+  font-size: 17px;
+}
+.more-page { display: flex; flex-direction: column; gap: 8px; }
+.more-page__empty { color: var(--muted); }
+
+/* ---- .xlist (more/ExercisesPage) ---- */
+.xlist__group { margin-top: 8px; }
+.xlist__family { margin: 0 0 4px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.xlist__rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.xlist__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--panel);
+  text-align: left;
+}
+.xlist__date { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.xlist__archived { margin-top: 12px; }
+.xlist__archived > summary { min-height: 44px; padding: 10px 0; color: var(--muted); cursor: pointer; }
+
+/* ---- .xhist (more/ExerciseHistoryPage) ---- */
+.xhist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.xhist__status { margin: 0; color: var(--muted); }
+.xhist__yeartitle { margin: 12px 0 4px; font-size: 13px; color: var(--muted); letter-spacing: 0.04em; }
+/* A phone gets two lines: date, totals, marks and load, then the sets across the full width (a
+   one-line row squeezed the sets to one number per line). From 560 px everything fits on one line. */
+.xhist__row {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content max-content;
+  grid-template-areas:
+    'day totals marks load'
+    'sets sets sets sets';
+  align-items: baseline;
+  gap: 4px 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--panel);
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+.xhist__day { grid-area: day; white-space: nowrap; }
+.xhist__run { margin-left: 2px; color: var(--accent); font-size: 11px; }
+.xhist__sets { grid-area: sets; overflow-wrap: anywhere; }
+.xhist__sets.is-note { color: var(--muted); font-style: italic; }
+.xhist__totals { grid-area: totals; justify-self: end; text-align: right; }
+.xhist__marks { grid-area: marks; }
+.xhist__load { grid-area: load; white-space: nowrap; }
+.xhist__totals, .xhist__load { color: var(--muted); font-size: 14px; }
+.xhist__note { grid-column: 1 / -1; color: var(--muted); font-size: 14px; font-style: italic; }
+@media (min-width: 560px) {
+  .xhist__row {
+    grid-template-columns: max-content minmax(0, 1fr) max-content max-content max-content;
+    grid-template-areas: 'day sets totals marks load';
+  }
+  .xhist__totals { justify-self: start; text-align: left; white-space: nowrap; }
+  .xhist__note { grid-column: 2 / -1; }
+}
+
+/* Why the submit button is disabled for a typed 0. */
+.numpad__hint { margin: -4px 0 0; color: var(--danger); font-size: 14px; text-align: right; }
+
+/* ---- .bw (components/more/BodyweightPage, BodyweightSheet) ---- */
+.bw { display: flex; flex-direction: column; gap: 12px; }
+.bw__banner { margin: 0; padding: 8px 12px; border-radius: 10px; background: var(--panel); border-left: 3px solid var(--danger); }
+.bw__actions { display: flex; justify-content: flex-end; }
+.bw__empty { margin: 0; color: var(--muted); }
+.bw__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.bw-line { display: block; width: 100%; height: auto; border-radius: 12px; background: var(--panel); }
+.bw-line__path { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.bw-line__label { fill: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.bw-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--panel);
+  text-align: left;
+}
+.bw-row:disabled { cursor: default; }
+.bw-row__day { min-width: 7em; color: var(--muted); }
+.bw-row__kg { font-variant-numeric: tabular-nums; font-weight: 600; }
+.bw-row__note { flex-basis: 100%; color: var(--muted); font-size: 14px; }
+.bw-sheet__label { margin: 0; color: var(--muted); }
+.bw-sheet__kg {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  background: var(--bg);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+.bw-sheet__field { display: flex; flex-direction: column; gap: 4px; color: var(--muted); }
+.bw-sheet__field input {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+}
+.bw-sheet__problem { margin: 0; color: var(--danger); }
+.bw-sheet__actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* ---- .catalog, .catalog-edit (components/more/CatalogPage, ExerciseEditPage) ---- */
+.catalog__banner { margin: 0; padding: 8px 12px; border-radius: 10px; background: var(--panel); border-left: 3px solid var(--danger); }
+.catalog__actions { display: flex; justify-content: flex-end; }
+.catalog__group { margin-top: 8px; }
+.catalog__family { margin: 0 0 4px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.catalog__rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.catalog-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--panel);
+  text-align: left;
+}
+.catalog-row__meta { color: var(--muted); font-size: 13px; }
+.catalog__group--archived .catalog-row__name { color: var(--muted); }
+.catalog-edit__cues {
+  width: 100%;
+  min-height: 88px;
+  padding: 8px 12px;
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  resize: vertical;
+}
+.catalog-edit__locked { padding: 8px 12px; border: 1px dashed var(--outline); border-radius: 10px; }
+.catalog-edit__fixed { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; }
+.catalog-edit__fixed dt { color: var(--muted); }
+.catalog-edit__fixed dd { margin: 0; }
+.catalog-edit__note, .catalog-edit__reason { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+/* shared/ClashSheet: why the name is taken and what "Use it" does. */
+.clash__detail { margin: 0 0 8px; color: var(--muted); }
+/* A deleted exercise's fields are read-only until Restore. */
+.exform__field :disabled { opacity: 0.7; }
+.catalog-edit__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.catalog-edit__actions .btn--primary { margin-right: auto; }
+.catalog-edit__deleted { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--muted); }
+
+/* ---- .flag (soft-issue badge under a block name: days/SessionPage, log/LogScreen; src/ui/soft-flags.ts) ---- */
+.flag {
+  display: inline-block; padding: 1px 8px; border: 1px solid var(--accent); border-radius: 999px;
+  color: var(--accent); font-size: 12px; line-height: 18px; white-space: nowrap;
+}
+.session-block__flags, .log-card__flags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+
+/* ---- .cal (components/more/CalendarPage) ---- */
+.cal { display: flex; flex-direction: column; gap: 16px; padding-top: 12px; }
+.cal__streak { margin: 0; font-weight: 600; }
+.cal__month { display: flex; flex-direction: column; gap: 6px; }
+.cal__title { margin: 0; font-size: 18px; }
+.cal__counts { margin: 0; color: var(--muted); font-size: 14px; }
+/* Spec 4 §8: 44 px touch targets. The grid reaches 10 px into the page's 16 px side padding and has
+   no gap, so 7 cells are 44 px wide from a 320 px screen on (288 + 20 = 7 × 44); the visible gap is
+   each cell's transparent border, which the background leaves out. */
+.cal__grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0; margin-inline: -10px; }
+.cal__weekday { color: var(--muted); font-size: 12px; text-align: center; }
+.cal__day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  min-height: 44px;
+  min-width: 0;
+  padding: 3px 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  background-clip: padding-box;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.cal__day--out { visibility: hidden; }
+.cal__day--today .cal__num { color: var(--accent); font-weight: 700; }
+button.cal__day { background: var(--panel); }
+.cal__num { font-size: 14px; line-height: 1; }
+.cal__dots { display: flex; gap: 3px; height: 8px; }
+.cal__dot { width: 8px; height: 8px; border-radius: 50%; border: 2px solid var(--chip-other); background: var(--chip-other); }
+.cal__dot--push { border-color: var(--chip-push); background: var(--chip-push); }
+.cal__dot--pull { border-color: var(--chip-pull); background: var(--chip-pull); }
+.cal__dot--legs { border-color: var(--chip-legs); background: var(--chip-legs); }
+.cal__dot--other { border-color: var(--chip-other); background: var(--chip-other); }
+.cal__dot--hollow { background: transparent; }
+.cal__more {
+  min-height: 44px; padding: 10px 14px; border: 1px solid var(--outline); border-radius: 10px;
+  background: var(--panel); color: var(--text); font: inherit;
+}
+.cal__session {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--text);
+  text-align: left;
+}

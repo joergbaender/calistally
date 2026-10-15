@@ -164,7 +164,7 @@ describe('syncVm issues', () => {
     expect(cards.map((c) => c.reason)).toEqual(['held-back', 'soft']);
     expect(cards[1]).toMatchObject({ path: soft.path, sessionId: s.id, title: 'Unknown exercise, metric mismatch' });
     expect(cards[1]?.detail).toBe(`${formatDayLong('2030-03-04')} · block 1: unknown exercise foo · block 3: plank is measured in seconds`);
-    expect(cards[1]?.advice).toBe('Nothing is blocked; open the session to fix the block.');
+    expect(cards[1]?.advice).toBe('Nothing is blocked; the block carries the same flag on the session page.');
   });
 
   it('numbers a block by its canonical position on the session page, not by its index in the file', () => {

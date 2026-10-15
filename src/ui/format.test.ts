@@ -3,6 +3,7 @@ import {
   formatAmount,
   formatClock,
   formatDay,
+  formatDayYear,
   formatDayLong,
   formatLoad,
   formatLoadShort,
@@ -57,6 +58,14 @@ describe('formatDay', () => {
   it('covers the other weekdays and months', () => {
     expect(formatDay('2030-11-30')).toBe('Sat 30 Nov');
     expect(formatDay('2030-01-01')).toBe('Tue 01 Jan');
+  });
+});
+
+describe('formatDayYear', () => {
+  it("is formatDay within today's year, and adds the year outside it", () => {
+    expect(formatDayYear('2030-03-07', '2030-12-31')).toBe('Thu 07 Mar');
+    expect(formatDayYear('2029-03-07', '2030-01-01')).toBe('Wed 07 Mar 2029');
+    expect(formatDayYear('2031-01-02', '2030-12-31')).toBe('Thu 02 Jan 2031');
   });
 });
 

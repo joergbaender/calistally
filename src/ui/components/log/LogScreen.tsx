@@ -1,11 +1,14 @@
 import { useSignal } from '@preact/signals';
 import type { JSX } from 'preact';
+import { latestCompletedAt } from '../../../model/derive';
 import { addBlock, findBlock } from '../../../model/edit';
+import type { Session } from '../../../model/types';
 import { useApp } from '../../context';
 import type { SessionRow } from '../../data';
+import { blockFlags } from '../../soft-flags';
 import { Button, Marks, SetChips } from '../shared';
-import type { CardVm, LogScreenVm } from './log-screen.vm';
-import { currentBlockId } from './log-state';
+import type { CardVm, LogScreenVm, RestStop } from './log-screen.vm';
+import { currentBlockId, restStop } from './log-state';
 import { BlockSheet } from './BlockSheet';
 import { ExerciseSearch } from './ExerciseSearch';
 import { editSession } from './outcome';
@@ -19,8 +22,9 @@ type Open =
   | { kind: 'block'; blockId: string; name: string }
   | { kind: 'search' };
 
-/** Spec 4 §4 "The screen": header, cards, Other exercise…, Done. The entry area is rendered by LogTab. */
-export function LogScreen(p: { row: SessionRow; vm: LogScreenVm }): JSX.Element {
+/** Spec 4 §4 "The screen": header, cards, Other exercise…, Done. The entry area is rendered by LogTab.
+ *  `reference` is the session the cards compare against (for the soft-issue flags of its blocks). */
+export function LogScreen(p: { row: SessionRow; vm: LogScreenVm; reference?: Session | undefined }): JSX.Element {
   const { data, router } = useApp();
   const open = useSignal<Open | undefined>(undefined);
   const close = (): void => {
@@ -47,6 +51,33 @@ export function LogScreen(p: { row: SessionRow; vm: LogScreenVm }): JSX.Element 
       return added;
     });
 
+  // Spec 4 §4: a tap stops the rest counter after the latest set, a tap on a stopped one resumes it.
+  // A device-local meta write only (no data file, so no write guard): the signal first, then meta.
+  // The signal holds the state, so a failed meta write only loses it across a reload: no toast.
+  const toggleCounter = (): void => {
+    const session = p.row.file.session;
+    const key = `restStop:${session.id}`;
+    if (p.vm.counter?.stopped === true) {
+      restStop.value = undefined;
+      data.setMeta(key, undefined).catch(() => {});
+      return;
+    }
+    const after = latestCompletedAt(session);
+    if (after === undefined) return;
+    const stop: RestStop = { after, at: data.clock().toISOString() };
+    restStop.value = { sessionId: session.id, ...stop };
+    data.setMeta(key, stop).catch(() => {});
+  };
+
+  // The soft issues the Sync tab lists (none without a catalog, as there), on the block they name:
+  // today's block of the card, else (a not-started card) the reference's block.
+  const noFlags = new Map<string, string[]>();
+  const catalogHere = data.catalog.value !== undefined;
+  const flags = catalogHere ? blockFlags(p.row.file.session, data.exercises.value) : noFlags;
+  const refFlags = catalogHere && p.reference !== undefined ? blockFlags(p.reference, data.exercises.value) : noFlags;
+  const flagsOf = (c: CardVm): string[] =>
+    (c.todayBlockId !== undefined ? flags.get(c.todayBlockId) : c.referenceBlockId !== undefined ? refFlags.get(c.referenceBlockId) : undefined) ?? [];
+
   const sheet = open.value;
   return (
     <section class="log">
@@ -70,6 +101,8 @@ export function LogScreen(p: { row: SessionRow; vm: LogScreenVm }): JSX.Element 
           key={c.key}
           card={c}
           counter={p.vm.counter}
+          onTapCounter={toggleCounter}
+          flags={flagsOf(c)}
           starting={guard.held()}
           onStart={() => void startBlock(c.exerciseId)}
           onTapSet={(setId) => (open.value = { kind: 'set', setId })}
@@ -92,7 +125,10 @@ export function LogScreen(p: { row: SessionRow; vm: LogScreenVm }): JSX.Element 
 
 function Card(p: {
   card: CardVm;
-  counter: string | undefined;
+  counter: LogScreenVm['counter'];
+  onTapCounter(): void;
+  /** Soft-issue flags of the card's block (soft-flags.ts): today's, else the reference's; shown under its name. */
+  flags: readonly string[];
   /** A Start is running or waiting for its block to show: every Start is disabled. */
   starting: boolean;
   onStart(): void;
@@ -137,6 +173,13 @@ function Card(p: {
         </h3>
         {started ? <span class="log-card__load">{c.loadText}</span> : <Button kind="primary" disabled={p.starting} onClick={p.onStart}>Start</Button>}
       </div>
+      {p.flags.length > 0 && (
+        <p class="log-card__flags">
+          {p.flags.map((f) => (
+            <span key={f} class="flag">{f}</span>
+          ))}
+        </p>
+      )}
       <div class="log-card__body" onClick={makeCurrent}>
         {started && (
           <>
@@ -169,7 +212,14 @@ function Card(p: {
               {c.totals.reference !== '' && <span>{c.totals.reference}</span>}
               {c.marks !== undefined && <Marks amount={c.marks.amount} load={c.marks.load} provisional />}
               {current && p.counter !== undefined && (
-                <span class="log-card__counter" aria-label="Since the last set">{p.counter}</span>
+                <button
+                  type="button"
+                  class={`log-card__counter${p.counter.stopped ? ' is-stopped' : ''}`}
+                  aria-label={p.counter.stopped ? `Rest taken ${p.counter.text}, tap to resume` : `Rest ${p.counter.text} since the last set, tap to stop`}
+                  onClick={p.onTapCounter}
+                >
+                  {p.counter.text}
+                </button>
               )}
             </div>
           )}

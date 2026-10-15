@@ -74,5 +74,5 @@ export function reportHeldBack(data: Data): void {
   const create = data.create.bind(data);
   const held = (r: WriteOutcome): WriteOutcome => (r.ok ? { ok: true, heldBack: true } : r);
   vi.spyOn(data, 'edit').mockImplementation(async <K extends FileKind>(kind: K, path: string, fn: (file: FileOf<K>) => FileOf<K>) => held(await edit(kind, path, fn)));
-  vi.spyOn(data, 'create').mockImplementation(async (kind: FileKind, path: string, file: unknown) => held(await create(kind, path, file)));
+  vi.spyOn(data, 'create').mockImplementation(async <K extends FileKind>(kind: K, path: string, file: FileOf<K>) => held(await create(kind, path, file)));
 }

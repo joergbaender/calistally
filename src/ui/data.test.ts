@@ -8,6 +8,7 @@ import type { SyncStatus } from '../sync/engine';
 import { BODYWEIGHT_PATH, EXERCISES_PATH, sessionPath } from '../sync/paths';
 import { Store, type FileRow, type WriteResult } from '../sync/store';
 import { Data, sessionRowById, storeChanges, type DataDeps } from './data';
+import { dismissToast, toast } from './toast';
 
 const NOW = new Date('2030-03-04T11:00:00.000Z');
 
@@ -412,6 +413,70 @@ describe('storeChanges', () => {
   });
 });
 
+describe('background refreshes', () => {
+  const failure = () => new Error('The database connection is closing');
+
+  it('retries a failed refresh once: the fresh row shows and there is no toast', async () => {
+    dismissToast();
+    const { data, store, channel } = await makeData();
+    await data.load();
+    await store.saveRow(okRow(sA));
+    const getRow = vi.spyOn(store, 'getRow').mockRejectedValueOnce(failure());
+    channel.post(pathOf(sA));
+    await vi.waitFor(() => expect(data.sessions.value.map((r) => r.path)).toEqual([pathOf(sA)]));
+    expect(getRow).toHaveBeenCalledTimes(2);
+    expect(toast.value).toBeUndefined();
+  });
+
+  it('says so with one toast when the retry fails too, and never rejects', async () => {
+    dismissToast();
+    const { data, store, channel } = await makeData();
+    await data.load();
+    const getRow = vi.spyOn(store, 'getRow').mockRejectedValue(failure());
+    const shown: (string | undefined)[] = [];
+    const off = toast.subscribe((t) => shown.push(t?.text));
+    channel.post(pathOf(sA));
+    await vi.waitFor(() => expect(toast.value?.text).toBe("Couldn't reload the data; reopen the app"));
+    off();
+    expect(shown.filter((t) => t !== undefined)).toHaveLength(1);
+    expect(toast.value?.ms).toBe(4000);
+    expect(getRow).toHaveBeenCalledTimes(2);
+    expect(data.sessions.value).toEqual([]);
+  });
+
+  it("applies the same retry to the store's own onChange", async () => {
+    dismissToast();
+    const changes = storeChanges(undefined);
+    const store = new Store(await openDb(new IDBFactory()), { onChange: changes.onChange });
+    const data = new Data({ store, now: () => NOW });
+    changes.bind(data);
+    await data.load();
+    const getRow = vi.spyOn(store, 'getRow').mockRejectedValue(failure());
+    await store.writeFile('session', pathOf(sA), sessionFile(sA), NOW);
+    await vi.waitFor(() => expect(toast.value?.text).toBe("Couldn't reload the data; reopen the app"));
+    expect(getRow).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries a failed issues reload once, then stays quiet', async () => {
+    dismissToast();
+    const { data, store, engine } = await makeData();
+    await data.load();
+    // load() subscribes to the engine, whose first status starts a reload of its own: let it finish.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const issues = vi.spyOn(store, 'issues').mockRejectedValueOnce(failure());
+    await store.saveRow({ ...okRow(sB), duplicateOf: pathOf(sA) });
+    engine.emit({ phase: 'pushing' });
+    await vi.waitFor(() => expect(data.issues.value.map((i) => i.reason)).toEqual(['duplicate']));
+    expect(issues).toHaveBeenCalledTimes(2);
+    expect(toast.value).toBeUndefined();
+
+    issues.mockRejectedValue(failure());
+    engine.emit({ phase: 'idle' });
+    await vi.waitFor(() => expect(issues).toHaveBeenCalledTimes(4));
+    expect(toast.value).toBeUndefined();
+  });
+});
+
 describe('Data meta, clock and dispose', () => {
   it('getMeta and setMeta go to the store meta', async () => {
     const { data, store } = await makeData();
@@ -452,6 +517,18 @@ describe('Data meta, clock and dispose', () => {
     expect(cleared).toEqual([1, 2]);
     data.setClock('off');
     expect(cleared).toEqual([1, 2]);
+  });
+
+  it('setClock refreshes now at once, so the first frame after a rate change is not stale', async () => {
+    let current = NOW;
+    const { data } = await makeData({ now: () => current, setInterval: () => 'tick', clearInterval: () => {} });
+    data.setClock('slow');
+    current = new Date('2030-03-04T11:00:59.000Z');
+    data.setClock('fast');
+    expect(data.now.value).toEqual(current);
+    current = new Date('2030-03-04T11:01:00.000Z');
+    data.setClock('off');
+    expect(data.now.value).toEqual(new Date('2030-03-04T11:00:59.000Z'));
   });
 
   it('dispose clears the interval and unsubscribes from engine and channel', async () => {

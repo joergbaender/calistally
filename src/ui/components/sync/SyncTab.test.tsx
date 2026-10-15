@@ -207,7 +207,7 @@ describe('SyncTab, connected', () => {
     const card = document.querySelector('.sync-issue--soft') as HTMLElement;
     expect(within(card).getByText('Unknown exercise')).toBeTruthy();
     expect(within(card).getByText(/block 1: unknown exercise nope/)).toBeTruthy();
-    expect(within(card).getByText('Nothing is blocked; open the session to fix the block.')).toBeTruthy();
+    expect(within(card).getByText('Nothing is blocked; the block carries the same flag on the session page.')).toBeTruthy();
     expect(within(card).getByRole('link', { name: 'Open the session' }).getAttribute('href')).toBe(`#/days/${unknown.id}`);
   });
 

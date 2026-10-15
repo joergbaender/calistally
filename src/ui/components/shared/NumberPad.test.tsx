@@ -77,5 +77,22 @@ describe('NumberPad', () => {
     expect(submit('Use').disabled).toBe(false);
     tap('Use');
     expect(onSubmit).toHaveBeenCalledWith(0);
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('without allowZero a typed 0 says why the submit is disabled (default text, or zeroHint)', () => {
+    render(<NumberPad value={undefined} submitLabel="Use" allowZero={false} onSubmit={() => {}} onCancel={() => {}} />);
+    expect(screen.queryByRole('status')).toBeNull();
+    tap('0');
+    tap('.');
+    expect(screen.getByRole('status').textContent).toBe('More than 0');
+    tap('5');
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('zeroHint replaces the default text', () => {
+    render(<NumberPad value={undefined} submitLabel="Use" allowZero={false} zeroHint="More than 0 kg" onSubmit={() => {}} onCancel={() => {}} />);
+    tap('0');
+    expect(screen.getByRole('status').textContent).toBe('More than 0 kg');
   });
 });

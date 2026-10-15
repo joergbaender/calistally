@@ -61,7 +61,7 @@ describe('App', () => {
     expect(document.querySelector('main h1')?.textContent).toBe('Session'); // the session page's BackBar
     expect(screen.getByText('This session is not here.')).toBeTruthy();
     act(() => { router.navigate({ tab: 'more' }); });
-    expect(heading()).toBe('More');
+    expect(screen.getByRole('navigation', { name: 'More' })).toBeTruthy();
     act(() => { router.navigate({ tab: 'sync' }); });
     expect(document.querySelector('.sync')).toBeTruthy();
   });

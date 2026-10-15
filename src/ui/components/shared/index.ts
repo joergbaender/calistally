@@ -1,5 +1,7 @@
 export { BackBar } from './BackBar';
 export { Button } from './Button';
+export { ClashSheet } from './ClashSheet';
+export { ExerciseForm } from './ExerciseForm';
 export { Marks } from './Marks';
 export { NumberPad } from './NumberPad';
 export { SetChips } from './SetChips';

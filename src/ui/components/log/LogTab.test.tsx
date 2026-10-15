@@ -3,7 +3,7 @@ import { signal } from '@preact/signals';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/preact';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { block, exercise, exercisesFile, ladder, session, sessionFile } from '../../../model/test-fixtures';
+import { block, exercise, exercisesFile, ladder, session, sessionFile, timedSet } from '../../../model/test-fixtures';
 import type { FileKind, Session, SessionFile } from '../../../model/types';
 import { openDb } from '../../../sync/db';
 import { EXERCISES_PATH, sessionPath } from '../../../sync/paths';
@@ -12,7 +12,7 @@ import { AppContext, type AppDeps, type SyncActions } from '../../context';
 import { Data } from '../../data';
 import { localDate } from '../../format';
 import { Router, type RouterWindow } from '../../router';
-import { currentBlockId, entryDraft, referenceId, referenceLoadedFor } from './log-state';
+import { currentBlockId, entryDraft, referenceId, referenceLoadedFor, restStop } from './log-state';
 import { LogTab } from './LogTab';
 
 const NOW = new Date('2030-03-07T10:30:00.000Z');
@@ -35,7 +35,7 @@ function fakeWindow(): RouterWindow {
 
 const pathOf = (s: Session): string => sessionPath(s.date, s.id);
 
-async function mount(sessions: Session[], meta: Record<string, unknown> = {}) {
+async function mount(sessions: Session[], meta: Record<string, unknown> = {}, clock: () => Date = () => NOW) {
   const db = await openDb(new IDBFactory());
   let data: Data | undefined;
   const store = new Store(db, { onChange: (p) => void data?.refresh(p) });
@@ -45,7 +45,7 @@ async function mount(sessions: Session[], meta: Record<string, unknown> = {}) {
     expect(result).toEqual({ ok: true });
   }
   for (const [key, value] of Object.entries(meta)) await store.setMeta(key, value);
-  data = new Data({ store, now: () => NOW });
+  data = new Data({ store, now: clock });
   await data.load();
   const sync: SyncActions = {
     connect: vi.fn(), startPaste: vi.fn(), submitCode: vi.fn(), syncNow: vi.fn(), chooseEmptyFolder: vi.fn(),
@@ -57,8 +57,8 @@ async function mount(sessions: Session[], meta: Record<string, unknown> = {}) {
     updateAvailable: signal(false), buildId: 'b1',
   };
   const deps: AppDeps = { data, router: new Router(fakeWindow()), sync, ui };
-  render(<AppContext.Provider value={deps}><LogTab /></AppContext.Provider>);
-  return { data, store, router: deps.router };
+  const view = render(<AppContext.Provider value={deps}><LogTab /></AppContext.Provider>);
+  return { data, store, router: deps.router, view, deps };
 }
 
 async function sessionFiles(store: Store): Promise<SessionFile[]> {
@@ -69,6 +69,7 @@ afterEach(() => {
   currentBlockId.value = undefined;
   referenceId.value = undefined;
   referenceLoadedFor.value = undefined;
+  restStop.value = undefined;
   entryDraft.value = new Map();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -182,6 +183,33 @@ describe('LogTab with an open session', () => {
     expect(currentBlockId.value).toBe(added?.id);
     await waitFor(() => expect(screen.getByRole('article', { name: 'Push-ups' }).className).toContain('log-card--current'));
     expect(screen.getByRole('article', { name: 'Dips (Bar)' }).className).toContain('log-card--finished');
+  });
+
+  it("flags a block with an unknown exercise or a metric mismatch under its name, today's or, on a not-started card, the reference's", async () => {
+    const past = session([block(ladder([5]), { exerciseId: 'gone' })], { date: '2030-03-05', startedAt: '2030-03-05T10:00:00.000Z' });
+    const today = session(
+      [
+        block(ladder([5], { completedAt: '2030-03-07T10:05:00.000Z' }), { exerciseId: 'nope', order: 0 }),
+        block([timedSet({ completedAt: '2030-03-07T10:10:00.000Z' })], { exerciseId: 'pull-ups', order: 1 }),
+        block(ladder([8], { completedAt: '2030-03-07T10:20:00.000Z' }), { exerciseId: 'dips-bar', order: 2 }),
+      ],
+      { date: '2030-03-07', startedAt: '2030-03-07T10:00:00.000Z' },
+    );
+    await mount([past, today], { [`reference:${today.id}`]: past.id });
+    await waitFor(() => expect(screen.getByRole('article', { name: 'nope' })).toBeTruthy());
+    const flagsOf = (name: string): string[] =>
+      within(screen.getByRole('article', { name })).queryAllByText(/^(unknown exercise|metric mismatch)$/).map((e) => e.textContent ?? '');
+    expect(flagsOf('nope')).toEqual(['unknown exercise']);
+    expect(flagsOf('Pull-ups')).toEqual(['metric mismatch']);
+    expect(flagsOf('Dips (Bar)')).toEqual([]);
+    // The reference's block of an unknown exercise, not started today: the Sync tab lists it too.
+    expect(flagsOf('gone')).toEqual(['unknown exercise']);
+    // Under the name: after the heading, not inside it.
+    const card = screen.getByRole('article', { name: 'nope' });
+    const heading = within(card).getByRole('heading', { name: 'nope' });
+    const flag = within(card).getByText('unknown exercise');
+    expect(heading.contains(flag)).toBe(false);
+    expect(heading.compareDocumentPosition(flag) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('a double tap on Start adds one block', async () => {
@@ -299,8 +327,10 @@ describe('LogTab with an open session', () => {
     for (const s of [past, today]) await store.writeFile('session', pathOf(s), sessionFile(s), NOW);
     const data = new Data({ store, now: () => NOW });
     await data.load();
+    // Only the reference read is held; the other meta keys (the rest stop) read as missing at once.
     let answer: (v: string) => void = () => {};
-    vi.spyOn(data, 'getMeta').mockImplementation(<T,>() => new Promise<T | undefined>((resolve) => { answer = (v) => resolve(v as T); }));
+    vi.spyOn(data, 'getMeta').mockImplementation(<T,>(key: string) =>
+      key.startsWith('reference:') ? new Promise<T | undefined>((resolve) => { answer = (v) => resolve(v as T); }) : Promise.resolve(undefined));
     const sync: SyncActions = {
       connect: vi.fn(), startPaste: vi.fn(), submitCode: vi.fn(), syncNow: vi.fn(), chooseEmptyFolder: vi.fn(),
       updateApp: vi.fn(() => Promise.resolve<'reloading' | 'busy'>('reloading')), signOut: vi.fn(),
@@ -379,6 +409,103 @@ describe('LogTab with an open session', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Done' })).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(router.route.value).toEqual({ tab: 'days' });
+  });
+
+  describe('the rest counter', () => {
+    // The time is part of the button's name (a screen reader never sees its text otherwise).
+    const RUNNING = /^Rest \d+:\d\d since the last set, tap to stop$/;
+    const STOPPED = /^Rest taken \d+:\d\d, tap to resume$/;
+    const counter = (name: RegExp): HTMLElement => screen.getByRole('button', { name });
+    // openToday's two dips sets completed at 10:20; the clock and the now signal start at 10:30.
+    const AFTER = '2030-03-07T10:20:00.000Z';
+
+    it('a tap stops it: the text no longer moves with now and meta holds the stop; a second tap resumes and clears it', async () => {
+      const today = openToday();
+      let at = NOW;
+      const { data, store } = await mount([today], {}, () => at);
+      await waitFor(() => expect(counter(RUNNING).textContent).toBe('10:00'));
+      // The stop takes its time from data.clock(), not from the last tick.
+      at = new Date('2030-03-07T10:30:30.000Z');
+      fireEvent.click(counter(RUNNING));
+      await waitFor(() => expect(counter(STOPPED).textContent).toBe('10:30'));
+      expect(counter(STOPPED).className).toContain('is-stopped');
+      act(() => { data.now.value = new Date('2030-03-07T10:35:00.000Z'); });
+      expect(counter(STOPPED).textContent).toBe('10:30');
+      await waitFor(async () => expect(await store.getMeta(`restStop:${today.id}`)).toEqual({ after: AFTER, at: '2030-03-07T10:30:30.000Z' }));
+
+      fireEvent.click(counter(STOPPED));
+      await waitFor(() => expect(counter(RUNNING).textContent).toBe('15:00'));
+      expect(counter(RUNNING).className).not.toContain('is-stopped');
+      await waitFor(async () => expect(await store.getMeta(`restStop:${today.id}`)).toBeUndefined());
+    });
+
+    it('Add set ends the stop: the counter runs from the new set', async () => {
+      const today = openToday();
+      let at = NOW;
+      const { data, store } = await mount([today], {}, () => at);
+      await waitFor(() => expect(counter(RUNNING)).toBeTruthy());
+      fireEvent.click(counter(RUNNING));
+      await waitFor(() => expect(counter(STOPPED).textContent).toBe('10:00'));
+      at = new Date('2030-03-07T10:32:00.000Z');
+      fireEvent.click(screen.getByRole('button', { name: 'Add set · 8' }));
+      await waitFor(async () => expect((await fileOf(store, today)).session.blocks[0]?.sets).toHaveLength(3));
+      act(() => { data.now.value = new Date('2030-03-07T10:33:00.000Z'); });
+      await waitFor(() => expect(counter(RUNNING).textContent).toBe('1:00'));
+    });
+
+    it('names the time: running "Rest 10:00 since the last set, tap to stop", stopped "Rest taken 10:00, tap to resume"', async () => {
+      await mount([openToday()]);
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Rest 10:00 since the last set, tap to stop' })).toBeTruthy());
+      fireEvent.click(counter(RUNNING));
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Rest taken 10:00, tap to resume' })).toBeTruthy());
+    });
+
+    // A stored value of the wrong shape reads as running, like a failed read: the cards still render.
+    it.each([
+      ['null', null],
+      ['a number', 7],
+      ['a string', 'stopped'],
+      ['an object without at', { after: '2030-03-07T10:20:00.000Z' }],
+      ['an object whose at is not a timestamp', { after: '2030-03-07T10:20:00.000Z', at: 'soon' }],
+      ['an object whose after is not a timestamp', { after: 'later', at: '2030-03-07T10:30:00.000Z' }],
+      ['an object with a non-string at', { after: '2030-03-07T10:20:00.000Z', at: 12 }],
+    ])('a stored stop that is %s leaves the counter running', async (_name, stored) => {
+      const today = openToday();
+      await mount([today], { [`restStop:${today.id}`]: stored });
+      await waitFor(() => expect(counter(RUNNING).textContent).toBe('10:00'));
+      expect(document.querySelectorAll('.log-card')).toHaveLength(1);
+      expect(document.querySelector('[aria-busy]')).toBeNull();
+    });
+
+    it('a remount shows the stop frozen: at once after a tab switch, from meta after a reload', async () => {
+      const today = openToday();
+      const { store, view, deps } = await mount([today]);
+      await waitFor(() => expect(counter(RUNNING)).toBeTruthy());
+      fireEvent.click(counter(RUNNING));
+      await waitFor(async () => expect(await store.getMeta(`restStop:${today.id}`)).toEqual({ after: AFTER, at: NOW.toISOString() }));
+
+      // A tab switch unmounts the Log tab; the module state keeps the stop.
+      view.unmount();
+      const again = render(<AppContext.Provider value={deps}><LogTab /></AppContext.Provider>);
+      expect(counter(STOPPED).textContent).toBe('10:00');
+
+      // A reload (or a kill) loses the module state; the stop comes back from meta. Its read is held
+      // here past the reference's: nothing renders until both are in, so it never shows running first.
+      again.unmount();
+      referenceLoadedFor.value = undefined;
+      referenceId.value = undefined;
+      restStop.value = undefined;
+      const getMeta = deps.data.getMeta.bind(deps.data);
+      let release: () => void = () => {};
+      vi.spyOn(deps.data, 'getMeta').mockImplementation(<T,>(key: string) =>
+        key.startsWith('restStop:') ? new Promise<T | undefined>((resolve) => { release = () => void getMeta<T>(key).then(resolve); }) : getMeta<T>(key));
+      render(<AppContext.Provider value={deps}><LogTab /></AppContext.Provider>);
+      await new Promise((r) => setTimeout(r, 10));
+      expect(document.querySelectorAll('.log-card')).toHaveLength(0);
+      expect(screen.queryByRole('button', { name: RUNNING })).toBeNull();
+      act(() => release());
+      await waitFor(() => expect(counter(STOPPED).textContent).toBe('10:00'));
+    });
   });
 
   it('Done writes nothing: no file write, the queue unchanged (spec 4 U7)', async () => {
