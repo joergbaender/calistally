@@ -419,7 +419,7 @@ describe('LogTab with an open session', () => {
     // openToday's two dips sets completed at 10:20; the clock and the now signal start at 10:30.
     const AFTER = '2030-03-07T10:20:00.000Z';
 
-    it('a tap stops it: the text no longer moves with now and meta holds the stop; a second tap resumes and clears it', async () => {
+    it('a tap stops it: the text no longer moves with now and meta holds the stop; a second tap continues from the frozen value', async () => {
       const today = openToday();
       let at = NOW;
       const { data, store } = await mount([today], {}, () => at);
@@ -431,12 +431,44 @@ describe('LogTab with an open session', () => {
       expect(counter(STOPPED).className).toContain('is-stopped');
       act(() => { data.now.value = new Date('2030-03-07T10:35:00.000Z'); });
       expect(counter(STOPPED).textContent).toBe('10:30');
-      await waitFor(async () => expect(await store.getMeta(`restStop:${today.id}`)).toEqual({ after: AFTER, at: '2030-03-07T10:30:30.000Z' }));
+      await waitFor(async () => expect(await store.getMeta(`restStop:${today.id}`)).toEqual({ after: AFTER, pausedMs: 0, stoppedAt: '2030-03-07T10:30:30.000Z' }));
 
+      // Continued at 10:35: the 4:30 paused never counts, the counter goes on from 10:30.
+      at = new Date('2030-03-07T10:35:00.000Z');
       fireEvent.click(counter(STOPPED));
-      await waitFor(() => expect(counter(RUNNING).textContent).toBe('15:00'));
+      await waitFor(() => expect(counter(RUNNING).textContent).toBe('10:30'));
       expect(counter(RUNNING).className).not.toContain('is-stopped');
-      await waitFor(async () => expect(await store.getMeta(`restStop:${today.id}`)).toBeUndefined());
+      act(() => { data.now.value = new Date('2030-03-07T10:36:00.000Z'); });
+      expect(counter(RUNNING).textContent).toBe('11:30');
+      await waitFor(async () => expect(await store.getMeta(`restStop:${today.id}`)).toEqual({ after: AFTER, pausedMs: 270000 }));
+    });
+
+    it('a remount after a continue still leaves the pause out', async () => {
+      const today = openToday();
+      let at = NOW;
+      const { data, store, view, deps } = await mount([today], {}, () => at);
+      await waitFor(() => expect(counter(RUNNING)).toBeTruthy());
+      fireEvent.click(counter(RUNNING));
+      await waitFor(() => expect(counter(STOPPED).textContent).toBe('10:00'));
+      at = new Date('2030-03-07T10:32:00.000Z');
+      fireEvent.click(counter(STOPPED));
+      await waitFor(async () => expect(await store.getMeta(`restStop:${today.id}`)).toEqual({ after: AFTER, pausedMs: 120000 }));
+
+      // A reload loses the module state; the paused time comes back from meta.
+      view.unmount();
+      referenceLoadedFor.value = undefined;
+      referenceId.value = undefined;
+      restStop.value = undefined;
+      data.now.value = new Date('2030-03-07T10:33:00.000Z');
+      render(<AppContext.Provider value={deps}><LogTab /></AppContext.Provider>);
+      // 13:00 since the set, less 2:00 paused.
+      await waitFor(() => expect(counter(RUNNING).textContent).toBe('11:00'));
+    });
+
+    it('a stored stop of the earlier shape { after, at } shows frozen at `at`', async () => {
+      const today = openToday();
+      await mount([today], { [`restStop:${today.id}`]: { after: AFTER, at: '2030-03-07T10:25:00.000Z' } });
+      await waitFor(() => expect(counter(STOPPED).textContent).toBe('5:00'));
     });
 
     it('Add set ends the stop: the counter runs from the new set', async () => {
@@ -465,10 +497,12 @@ describe('LogTab with an open session', () => {
       ['null', null],
       ['a number', 7],
       ['a string', 'stopped'],
-      ['an object without at', { after: '2030-03-07T10:20:00.000Z' }],
+      ['an object with only after', { after: '2030-03-07T10:20:00.000Z' }],
       ['an object whose at is not a timestamp', { after: '2030-03-07T10:20:00.000Z', at: 'soon' }],
       ['an object whose after is not a timestamp', { after: 'later', at: '2030-03-07T10:30:00.000Z' }],
       ['an object with a non-string at', { after: '2030-03-07T10:20:00.000Z', at: 12 }],
+      ['an object with a negative pausedMs', { after: '2030-03-07T10:20:00.000Z', pausedMs: -1 }],
+      ['an object whose stoppedAt is not a timestamp', { after: '2030-03-07T10:20:00.000Z', pausedMs: 0, stoppedAt: 'soon' }],
     ])('a stored stop that is %s leaves the counter running', async (_name, stored) => {
       const today = openToday();
       await mount([today], { [`restStop:${today.id}`]: stored });
@@ -482,7 +516,7 @@ describe('LogTab with an open session', () => {
       const { store, view, deps } = await mount([today]);
       await waitFor(() => expect(counter(RUNNING)).toBeTruthy());
       fireEvent.click(counter(RUNNING));
-      await waitFor(async () => expect(await store.getMeta(`restStop:${today.id}`)).toEqual({ after: AFTER, at: NOW.toISOString() }));
+      await waitFor(async () => expect(await store.getMeta(`restStop:${today.id}`)).toEqual({ after: AFTER, pausedMs: 0, stoppedAt: NOW.toISOString() }));
 
       // A tab switch unmounts the Log tab; the module state keeps the stop.
       view.unmount();

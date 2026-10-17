@@ -14,8 +14,9 @@ export const referenceId: Signal<string | 'none' | undefined> = signal<string | 
  *  session (a tab switch) shows the cards at once instead of reading the meta key again. */
 export const referenceLoadedFor: Signal<string | undefined> = signal<string | undefined>(undefined);
 
-/** The stopped rest counter of the session named (spec 4 §4), loaded from meta `restStop:<sessionId>`
- *  together with the reference; undefined → running. Device-local, never in a file. */
+/** The rest counter's stop and paused time for the session named (spec 4 §4), loaded from meta
+ *  `restStop:<sessionId>` together with the reference; undefined → running with no pause.
+ *  Device-local, never in a file. */
 export const restStop: Signal<(RestStop & { sessionId: string }) | undefined> = signal<(RestStop & { sessionId: string }) | undefined>(undefined);
 
 /** What the owner set up for a block's next set and has not added yet: the typed value, the note
