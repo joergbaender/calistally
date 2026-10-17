@@ -51,26 +51,44 @@ export interface CurrentVm {
   loadText: string;
 }
 
-/** A tap on the rest counter (spec 4 §4), kept in meta `restStop:<sessionId>`: `after` is the latest
- *  completedAt at the tap, `at` the tap time. It applies only while that set is still the latest. */
+/** The rest counter's taps (spec 4 §4), kept in meta `restStop:<sessionId>`: `after` is the latest
+ *  completedAt they belong to, `pausedMs` the paused time already left out, `stoppedAt` the tap
+ *  time while stopped (absent once continued). It applies only while that set is still the latest. */
 export interface RestStop {
   after: string;
-  at: string;
+  pausedMs: number;
+  stoppedAt?: string;
 }
 
-/** A stored `restStop:` value is device-local but unchecked: only an object with two parsable
- *  timestamps counts; anything else reads as running (no stop). */
+const isTimestamp = (value: unknown): value is string => typeof value === 'string' && Number.isFinite(Date.parse(value));
+
+/** A stored `restStop:` value is device-local but unchecked: only parsable timestamps and a finite
+ *  `pausedMs` ≥ 0 count. The earlier build's `{ after, at }` reads as stopped at `at` with no pause,
+ *  so a counter stopped across the app update stays frozen. Anything else reads as running. */
 export function readRestStop(value: unknown): RestStop | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
-  const { after, at } = value as Partial<Record<keyof RestStop, unknown>>;
-  if (typeof after !== 'string' || typeof at !== 'string') return undefined;
-  return Number.isFinite(Date.parse(after)) && Number.isFinite(Date.parse(at)) ? { after, at } : undefined;
+  const { after, pausedMs, stoppedAt, at } = value as Partial<Record<keyof RestStop | 'at', unknown>>;
+  if (!isTimestamp(after)) return undefined;
+  if (pausedMs === undefined) return isTimestamp(at) ? { after, pausedMs: 0, stoppedAt: at } : undefined;
+  if (typeof pausedMs !== 'number' || !Number.isFinite(pausedMs) || pausedMs < 0) return undefined;
+  if (stoppedAt === undefined) return { after, pausedMs };
+  return isTimestamp(stoppedAt) ? { after, pausedMs, stoppedAt } : undefined;
+}
+
+/** A tap on the counter after the set `latest`, like a stopwatch: running → stopped at `now`;
+ *  stopped → continued, its paused time added to `pausedMs`. A record for another set is no pause.
+ *  A stop never lies before `latest` (a clock behind the set), so a continue runs on from 0:00. */
+export function tapRestStop(stop: RestStop | undefined, latest: string, now: Date): RestStop {
+  const own = stop?.after === latest ? stop : undefined;
+  const pausedMs = own?.pausedMs ?? 0;
+  if (own?.stoppedAt === undefined) return { after: latest, pausedMs, stoppedAt: new Date(Math.max(now.getTime(), Date.parse(latest))).toISOString() };
+  return { after: latest, pausedMs: pausedMs + Math.max(0, now.getTime() - Date.parse(own.stoppedAt)) };
 }
 
 export interface LogScreenVm {
   header: { date: string; startedAt: string; reference: string | undefined; offline: boolean };
   cards: CardVm[];
-  /** The rest since the latest set; `stopped` → frozen on the rest taken at the tap. */
+  /** The rest since the latest set less any paused time; `stopped` → frozen on the rest at the tap. */
   counter: { text: string; stopped: boolean } | undefined;
   current: CurrentVm | undefined;
 }
@@ -152,11 +170,13 @@ export function logScreenVm(input: LogScreenInput): LogScreenVm {
 
   // Session-wide (the real rest also when alternating exercises), hidden while the current block
   // has no set yet. The stop counts only while the set it was stopped after is still the latest:
-  // the next set (or deleting that one) runs the counter again with no write.
+  // the next set (or deleting that one) runs the counter again, with no pause and no write.
   const latest = card === undefined || card.todaySets.length === 0 ? undefined : latestCompletedAt(today);
   const stop = input.restStop !== undefined && input.restStop.after === latest ? input.restStop : undefined;
-  const until = stop === undefined ? now.getTime() : Date.parse(stop.at);
-  const counter = latest === undefined ? undefined : { text: formatClock(Math.max(0, (until - Date.parse(latest)) / 1000)), stopped: stop !== undefined };
+  const stoppedAt = stop?.stoppedAt;
+  const until = stoppedAt === undefined ? now.getTime() : Date.parse(stoppedAt);
+  const elapsedMs = latest === undefined ? 0 : until - Date.parse(latest) - (stop?.pausedMs ?? 0);
+  const counter = latest === undefined ? undefined : { text: formatClock(Math.max(0, elapsedMs / 1000)), stopped: stoppedAt !== undefined };
 
   let current: CurrentVm | undefined;
   if (card !== undefined && pair !== undefined && card.todayBlockId !== undefined) {

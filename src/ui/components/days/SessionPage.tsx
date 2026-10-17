@@ -164,6 +164,8 @@ export function SessionPage(p: { sessionId: string }): JSX.Element {
         )}
       </div>
 
+      {vm.showIntervalLegend && <p class="session__legend">+m:ss = time since the previous set, including the set itself</p>}
+
       {vm.blocks.map((b) => (
         <BlockView
           key={b.blockId}

@@ -59,6 +59,8 @@ export interface SessionPageVm {
   migrated: boolean;
   readOnly: { reason: string } | undefined;
   blocks: BlockRow[];
+  /** At least one set shows an interval: the page explains '+m:ss' once (spec 4 §5). */
+  showIntervalLegend: boolean;
   deleted: boolean;
 }
 
@@ -129,6 +131,7 @@ export function sessionPageVm(input: SessionPageInput): SessionPageVm {
     migrated: session.source === 'migrated',
     readOnly: input.readOnlyReason === undefined ? undefined : { reason: input.readOnlyReason },
     blocks,
+    showIntervalLegend: blocks.some((b) => b.sets.some((r) => r.interval !== undefined)),
     deleted: session.deletedAt !== undefined,
   };
 }

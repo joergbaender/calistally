@@ -7,7 +7,7 @@ import { useApp } from '../../context';
 import type { SessionRow } from '../../data';
 import { blockFlags } from '../../soft-flags';
 import { Button, Marks, SetChips } from '../shared';
-import type { CardVm, LogScreenVm, RestStop } from './log-screen.vm';
+import { tapRestStop, type CardVm, type LogScreenVm } from './log-screen.vm';
 import { currentBlockId, restStop } from './log-state';
 import { BlockSheet } from './BlockSheet';
 import { ExerciseSearch } from './ExerciseSearch';
@@ -51,22 +51,23 @@ export function LogScreen(p: { row: SessionRow; vm: LogScreenVm; reference?: Ses
       return added;
     });
 
-  // Spec 4 §4: a tap stops the rest counter after the latest set, a tap on a stopped one resumes it.
+  // Spec 4 §4: a tap stops the rest counter after the latest set, a tap on a stopped one continues
+  // it from the frozen value (the paused time is kept in the record, so it is never counted).
   // A device-local meta write only (no data file, so no write guard): the signal first, then meta.
   // The signal holds the state, so a failed meta write only loses it across a reload: no toast.
   const toggleCounter = (): void => {
     const session = p.row.file.session;
-    const key = `restStop:${session.id}`;
-    if (p.vm.counter?.stopped === true) {
-      restStop.value = undefined;
-      data.setMeta(key, undefined).catch(() => {});
-      return;
-    }
     const after = latestCompletedAt(session);
     if (after === undefined) return;
-    const stop: RestStop = { after, at: data.clock().toISOString() };
+    const held = restStop.value;
+    // One clock reading for the record and the `now` signal: a continue computed from the clock but
+    // shown against a lagging tick would dip a second below the frozen value.
+    const now = data.clock();
+    // tapRestStop builds a new record, so the signal's sessionId never reaches meta.
+    const stop = tapRestStop(held?.sessionId === session.id ? held : undefined, after, now);
+    data.now.value = now;
     restStop.value = { sessionId: session.id, ...stop };
-    data.setMeta(key, stop).catch(() => {});
+    data.setMeta(`restStop:${session.id}`, stop).catch(() => {});
   };
 
   // The soft issues the Sync tab lists (none without a catalog, as there), on the block they name:

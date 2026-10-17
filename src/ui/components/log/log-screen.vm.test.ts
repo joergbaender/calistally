@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { block, exercise, ladder, session, set, timedSet } from '../../../model/test-fixtures';
 import type { Block, Exercise, Session } from '../../../model/types';
 import { formatAmount, formatTime } from '../../format';
-import { logScreenVm, resolveReference, type RestStop } from './log-screen.vm';
+import { logScreenVm, readRestStop, resolveReference, tapRestStop, type RestStop } from './log-screen.vm';
 
 const PUSH = exercise({ id: 'push-ups', name: 'Push-ups', pattern: 'push' });
 const DIPS = exercise({ id: 'dips-bar', name: 'Dips (Bar)', pattern: 'push', defaultLoadType: 'added' });
@@ -30,7 +30,7 @@ function fixture() {
   return { reference, today, refDips, refPush, refDiamond, todayDips, todayPush };
 }
 
-const vmOf = (today: Session, reference: Session | undefined, over: { currentBlockId?: string; now?: Date; online?: boolean; restStop?: RestStop } = {}) =>
+const vmOf = (today: Session, reference: Session | undefined, over: { currentBlockId?: string; now?: Date; online?: boolean; restStop?: RestStop | undefined } = {}) =>
   logScreenVm({ today, reference, catalog: CATALOG, currentBlockId: over.currentBlockId, now: over.now ?? NOW, online: over.online ?? true, restStop: over.restStop });
 
 describe('logScreenVm header', () => {
@@ -200,7 +200,9 @@ describe('logScreenVm counter and current', () => {
   });
 
   // The last push-up set of the fixture completed at 10:13.
-  const STOP: RestStop = { after: '2030-03-07T10:13:00.000Z', at: '2030-03-07T10:14:30.000Z' };
+  const LATEST = '2030-03-07T10:13:00.000Z';
+  const STOP: RestStop = { after: LATEST, pausedMs: 0, stoppedAt: '2030-03-07T10:14:30.000Z' };
+  const at = (time: string): Date => new Date(`2030-03-07T${time}.000Z`);
 
   it('a stop after the latest set freezes the counter on the rest taken, whatever now says', () => {
     const f = fixture();
@@ -208,11 +210,60 @@ describe('logScreenVm counter and current', () => {
     expect(vmOf(f.today, f.reference, { restStop: STOP, now: new Date('2030-03-07T11:00:00.000Z') }).counter).toEqual({ text: '1:30', stopped: true });
   });
 
-  it('runs again from the next set once one is added after the stop', () => {
+  it('a tap while running stops it at the tap time with no pause yet', () => {
+    expect(tapRestStop(undefined, LATEST, at('10:14:30'))).toEqual(STOP);
+  });
+
+  it('a second tap continues from the frozen value: the paused time never counts', () => {
+    const f = fixture();
+    // Stopped at 1:30 (10:14:30), continued at 10:20:00: 5:30 paused.
+    const resumed = tapRestStop(STOP, LATEST, at('10:20:00'));
+    expect(resumed).toEqual({ after: LATEST, pausedMs: 330000 });
+    expect(vmOf(f.today, f.reference, { restStop: resumed, now: at('10:20:00') }).counter).toEqual({ text: '1:30', stopped: false });
+    // now 10:30: 17:00 since the set, less 5:30 paused.
+    expect(vmOf(f.today, f.reference, { restStop: resumed }).counter).toEqual({ text: '11:30', stopped: false });
+  });
+
+  it('stop and continue repeat, and every pause is left out', () => {
+    const f = fixture();
+    const second = tapRestStop(tapRestStop(STOP, LATEST, at('10:20:00')), LATEST, at('10:21:00'));
+    // 8:00 since the set at the second stop, less the first pause of 5:30.
+    expect(second).toEqual({ after: LATEST, pausedMs: 330000, stoppedAt: '2030-03-07T10:21:00.000Z' });
+    expect(vmOf(f.today, f.reference, { restStop: second }).counter).toEqual({ text: '2:30', stopped: true });
+    const again = tapRestStop(second, LATEST, at('10:25:00'));
+    expect(again).toEqual({ after: LATEST, pausedMs: 570000 });
+    // now 10:30: 17:00 less both pauses (5:30 + 4:00).
+    expect(vmOf(f.today, f.reference, { restStop: again }).counter).toEqual({ text: '7:30', stopped: false });
+  });
+
+  it('a stored record after a continue (no stoppedAt) still leaves the pause out after a reload', () => {
+    const f = fixture();
+    const stored: unknown = JSON.parse(JSON.stringify(tapRestStop(STOP, LATEST, at('10:20:00'))));
+    expect(vmOf(f.today, f.reference, { restStop: readRestStop(stored) }).counter).toEqual({ text: '11:30', stopped: false });
+  });
+
+  it('a tap after a stop recorded for another set starts a fresh stop with no pause', () => {
+    const other: RestStop = { after: '2030-03-07T10:12:00.000Z', pausedMs: 60000 };
+    expect(tapRestStop(other, LATEST, at('10:14:30'))).toEqual(STOP);
+  });
+
+  it('a tap with the clock behind the latest set stops at that set, so a continue runs at once from 0:00', () => {
+    const f = fixture();
+    // The device clock reads 10:12, a minute before the latest set's completedAt.
+    const stop = tapRestStop(undefined, LATEST, at('10:12:00'));
+    expect(stop).toEqual({ after: LATEST, pausedMs: 0, stoppedAt: LATEST });
+    expect(vmOf(f.today, f.reference, { restStop: stop }).counter).toEqual({ text: '0:00', stopped: true });
+    const resumed = tapRestStop(stop, LATEST, at('10:14:00'));
+    expect(resumed).toEqual({ after: LATEST, pausedMs: 60000 });
+    expect(vmOf(f.today, f.reference, { restStop: resumed, now: at('10:14:30') }).counter).toEqual({ text: '0:30', stopped: false });
+  });
+
+  it('runs again from the next set once one is added after the stop, with no pause', () => {
     const f = fixture();
     const push: Block = { ...f.todayPush, sets: [...f.todayPush.sets, set({ reps: 13, order: 4, completedAt: '2030-03-07T10:20:00.000Z' })] };
     const today: Session = { ...f.today, blocks: [f.todayDips, push] };
     expect(vmOf(today, f.reference, { restStop: STOP }).counter).toEqual({ text: '10:00', stopped: false });
+    expect(vmOf(today, f.reference, { restStop: { after: LATEST, pausedMs: 330000 } }).counter).toEqual({ text: '10:00', stopped: false });
   });
 
   it('runs from the earlier set when the latest is deleted after the stop; restoring it freezes it again', () => {
@@ -226,8 +277,9 @@ describe('logScreenVm counter and current', () => {
 
   it('ignores a stop recorded after another set', () => {
     const f = fixture();
-    const old: RestStop = { after: '2030-03-07T10:12:00.000Z', at: '2030-03-07T10:12:40.000Z' };
+    const old: RestStop = { after: '2030-03-07T10:12:00.000Z', pausedMs: 0, stoppedAt: '2030-03-07T10:12:40.000Z' };
     expect(vmOf(f.today, f.reference, { restStop: old }).counter).toEqual({ text: '17:00', stopped: false });
+    expect(vmOf(f.today, f.reference, { restStop: { after: '2030-03-07T10:12:00.000Z', pausedMs: 60000 } }).counter).toEqual({ text: '17:00', stopped: false });
   });
 
   it('is hidden while the current block has no set yet, also after another exercise’s sets', () => {
@@ -297,5 +349,37 @@ describe('resolveReference', () => {
     expect(resolveReference(undefined, all, catalog, today.id)?.id).toBe(pushNew.id);
     expect(resolveReference('gone', all, catalog, today.id)?.id).toBe(pushNew.id);
     expect(resolveReference(today.id, all, catalog, today.id)?.id).toBe(pushNew.id);
+  });
+});
+
+describe('readRestStop', () => {
+  const AFTER = '2030-03-07T10:13:00.000Z';
+  const AT = '2030-03-07T10:14:30.000Z';
+
+  it('reads a stopped and a continued record', () => {
+    expect(readRestStop({ after: AFTER, pausedMs: 0, stoppedAt: AT })).toEqual({ after: AFTER, pausedMs: 0, stoppedAt: AT });
+    expect(readRestStop({ after: AFTER, pausedMs: 330000 })).toEqual({ after: AFTER, pausedMs: 330000 });
+  });
+
+  it('reads the earlier { after, at } record as stopped at `at` with no pause', () => {
+    expect(readRestStop({ after: AFTER, at: AT })).toEqual({ after: AFTER, pausedMs: 0, stoppedAt: AT });
+    const { today, reference } = fixture();
+    expect(vmOf(today, reference, { restStop: readRestStop({ after: AFTER, at: AT }) }).counter).toEqual({ text: '1:30', stopped: true });
+  });
+
+  it.each([
+    ['undefined (a resume of the earlier build)', undefined],
+    ['null', null],
+    ['a string', 'stopped'],
+    ['an object with only after', { after: AFTER }],
+    ['an after that is not a timestamp', { after: 'later', pausedMs: 0 }],
+    ['a negative pausedMs', { after: AFTER, pausedMs: -1 }],
+    ['a pausedMs that is not finite', { after: AFTER, pausedMs: Infinity }],
+    ['a pausedMs that is a string', { after: AFTER, pausedMs: '0' }],
+    ['a stoppedAt that is not a timestamp', { after: AFTER, pausedMs: 0, stoppedAt: 'soon' }],
+    ['a stoppedAt that is not a string', { after: AFTER, pausedMs: 0, stoppedAt: 12 }],
+    ['an earlier record whose at is not a timestamp', { after: AFTER, at: 'soon' }],
+  ])('reads %s as running', (_name, stored) => {
+    expect(readRestStop(stored)).toBeUndefined();
   });
 });

@@ -35,8 +35,8 @@ function OpenSession(p: { row: SessionRow }): JSX.Element {
       .then(([reference, stored]) => {
         if (!live) return;
         referenceId.value = reference;
-        // A resume stores undefined under the key (the meta store has no delete), and a value of the
-        // wrong shape is no stop either: both read as running.
+        // A missing key, the undefined the earlier build stored on a resume (the meta store has no
+        // delete) and a value of the wrong shape are no stop: all read as running.
         const stop = readRestStop(stored);
         restStop.value = stop === undefined ? undefined : { sessionId: id, ...stop };
       })
