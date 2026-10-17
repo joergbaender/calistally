@@ -594,6 +594,7 @@ body:has(.entry) .toast { bottom: calc(56px + 190px + env(safe-area-inset-bottom
 /* At least 44 px tall (spec 4 §8 touch targets). */
 .session__banner-link { display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; }
 .session__deleted { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-radius: 10px; background: var(--panel); color: var(--danger); font-weight: 600; }
+.session__legend { margin: 0; color: var(--muted); font-size: 12px; }
 .session__foot { display: flex; justify-content: space-between; gap: 8px; padding-top: 8px; }
 .session-head { display: flex; flex-direction: column; gap: 6px; }
 .session-head__uncertain { margin: 0; color: var(--muted); font-size: 14px; }

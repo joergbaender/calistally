@@ -323,6 +323,22 @@ describe('SessionPage', () => {
     expect(screen.getByLabelText(`stated rest ${formatAmount(120)} s`).textContent).toBe(`rest ${formatAmount(120)} s`);
   });
 
+  it('explains the set intervals once, above the first block; no legend without intervals', async () => {
+    const LEGEND = '+m:ss = time since the previous set, including the set itself';
+    const sets = [set({ order: 0, reps: 8, completedAt: '2030-03-07T10:00:00.000Z' }), set({ order: 1, reps: 8, completedAt: '2030-03-07T10:01:02.000Z' })];
+    const timed = session([block(sets, { exerciseId: 'pull-ups' }), block(ladder([12]), { exerciseId: 'dips-bar', order: 1 })], { date: '2030-03-07' });
+    await mount(timed);
+    await waitFor(() => expect(article('Pull-ups')).toBeTruthy());
+    const legends = screen.getAllByText(LEGEND);
+    expect(legends).toHaveLength(1);
+    expect(legends[0]?.compareDocumentPosition(article('Pull-ups')) ?? 0).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    cleanup();
+
+    await mount(threeBlocks());
+    await waitFor(() => expect(article('Pull-ups')).toBeTruthy());
+    expect(screen.queryByText(LEGEND)).toBeNull();
+  });
+
   it('the read-only banner link to the Sync tab is a touch target', async () => {
     const s = threeBlocks();
     const m = await setup({ now: NOW, sessions: [], exercises: [PULL, DIPS, ROWS] });

@@ -108,6 +108,30 @@ describe('sessionPageVm: blocks and sets', () => {
     expect(vmOf(s).blocks[0]?.sets.map((r) => r.intervalLabel)).toEqual([undefined, 'interval 1:02 since the previous set', undefined]);
   });
 
+  it('the interval legend shows only when a set shows an interval', () => {
+    const timed = session([
+      block(
+        [set({ order: 0, reps: 8, completedAt: '2030-03-07T10:00:00.000Z' }), set({ order: 1, reps: 8, completedAt: '2030-03-07T10:01:02.000Z' })],
+        { exerciseId: 'pull-ups' },
+      ),
+    ]);
+    expect(vmOf(timed).showIntervalLegend).toBe(true);
+    // A migrated session has no completedAt; one timed set alone has no interval either.
+    expect(vmOf(session([block(ladder([8, 7]), { exerciseId: 'pull-ups' })], { source: 'migrated' })).showIntervalLegend).toBe(false);
+    expect(vmOf(session([block([set({ reps: 8, completedAt: '2030-03-07T10:00:00.000Z' })], { exerciseId: 'pull-ups' })])).showIntervalLegend).toBe(false);
+    // A deleted set's interval is not shown, so it shows no legend.
+    const deleted = session([
+      block(
+        [
+          set({ order: 0, reps: 8, completedAt: '2030-03-07T10:00:00.000Z' }),
+          set({ order: 1, reps: 8, completedAt: '2030-03-07T10:01:02.000Z', deletedAt: '2030-03-07T10:02:00.000Z' }),
+        ],
+        { exerciseId: 'pull-ups' },
+      ),
+    ]);
+    expect(vmOf(deleted).showIntervalLegend).toBe(false);
+  });
+
   it('totals text', () => {
     const s = session([block(ladder([8, 7, 6]), { exerciseId: 'pull-ups' }), block(ladder([10]), { exerciseId: 'dips-bar', order: 1 })]);
     expect(vmOf(s).blocks.map((b) => b.totals)).toEqual([`${formatAmount(21)} · 3 sets`, `${formatAmount(10)} · 1 set`]);
