@@ -247,6 +247,17 @@ describe('logScreenVm counter and current', () => {
     expect(tapRestStop(other, LATEST, at('10:14:30'))).toEqual(STOP);
   });
 
+  it('a tap with the clock behind the latest set stops at that set, so a continue runs at once from 0:00', () => {
+    const f = fixture();
+    // The device clock reads 10:12, a minute before the latest set's completedAt.
+    const stop = tapRestStop(undefined, LATEST, at('10:12:00'));
+    expect(stop).toEqual({ after: LATEST, pausedMs: 0, stoppedAt: LATEST });
+    expect(vmOf(f.today, f.reference, { restStop: stop }).counter).toEqual({ text: '0:00', stopped: true });
+    const resumed = tapRestStop(stop, LATEST, at('10:14:00'));
+    expect(resumed).toEqual({ after: LATEST, pausedMs: 60000 });
+    expect(vmOf(f.today, f.reference, { restStop: resumed, now: at('10:14:30') }).counter).toEqual({ text: '0:30', stopped: false });
+  });
+
   it('runs again from the next set once one is added after the stop, with no pause', () => {
     const f = fixture();
     const push: Block = { ...f.todayPush, sets: [...f.todayPush.sets, set({ reps: 13, order: 4, completedAt: '2030-03-07T10:20:00.000Z' })] };

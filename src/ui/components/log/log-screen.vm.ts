@@ -76,11 +76,12 @@ export function readRestStop(value: unknown): RestStop | undefined {
 }
 
 /** A tap on the counter after the set `latest`, like a stopwatch: running → stopped at `now`;
- *  stopped → continued, its paused time added to `pausedMs`. A record for another set is no pause. */
+ *  stopped → continued, its paused time added to `pausedMs`. A record for another set is no pause.
+ *  A stop never lies before `latest` (a clock behind the set), so a continue runs on from 0:00. */
 export function tapRestStop(stop: RestStop | undefined, latest: string, now: Date): RestStop {
   const own = stop?.after === latest ? stop : undefined;
   const pausedMs = own?.pausedMs ?? 0;
-  if (own?.stoppedAt === undefined) return { after: latest, pausedMs, stoppedAt: now.toISOString() };
+  if (own?.stoppedAt === undefined) return { after: latest, pausedMs, stoppedAt: new Date(Math.max(now.getTime(), Date.parse(latest))).toISOString() };
   return { after: latest, pausedMs: pausedMs + Math.max(0, now.getTime() - Date.parse(own.stoppedAt)) };
 }
 

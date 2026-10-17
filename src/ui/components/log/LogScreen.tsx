@@ -60,8 +60,12 @@ export function LogScreen(p: { row: SessionRow; vm: LogScreenVm; reference?: Ses
     const after = latestCompletedAt(session);
     if (after === undefined) return;
     const held = restStop.value;
+    // One clock reading for the record and the `now` signal: a continue computed from the clock but
+    // shown against a lagging tick would dip a second below the frozen value.
+    const now = data.clock();
     // tapRestStop builds a new record, so the signal's sessionId never reaches meta.
-    const stop = tapRestStop(held?.sessionId === session.id ? held : undefined, after, data.clock());
+    const stop = tapRestStop(held?.sessionId === session.id ? held : undefined, after, now);
+    data.now.value = now;
     restStop.value = { sessionId: session.id, ...stop };
     data.setMeta(`restStop:${session.id}`, stop).catch(() => {});
   };

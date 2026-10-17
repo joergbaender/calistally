@@ -443,6 +443,22 @@ describe('LogTab with an open session', () => {
       await waitFor(async () => expect(await store.getMeta(`restStop:${today.id}`)).toEqual({ after: AFTER, pausedMs: 270000 }));
     });
 
+    it('right after a continue the counter shows the frozen value, even while the now signal lags the clock', async () => {
+      const today = openToday();
+      let at = NOW;
+      const { data } = await mount([today], {}, () => at);
+      await waitFor(() => expect(counter(RUNNING).textContent).toBe('10:00'));
+      at = new Date('2030-03-07T10:30:30.000Z');
+      fireEvent.click(counter(RUNNING));
+      await waitFor(() => expect(counter(STOPPED).textContent).toBe('10:30'));
+      // The last tick was a second before the continue's clock reading.
+      act(() => { data.now.value = new Date('2030-03-07T10:34:59.000Z'); });
+      at = new Date('2030-03-07T10:35:00.000Z');
+      fireEvent.click(counter(STOPPED));
+      await waitFor(() => expect(counter(RUNNING)).toBeTruthy());
+      expect(counter(RUNNING).textContent).toBe('10:30');
+    });
+
     it('a remount after a continue still leaves the pause out', async () => {
       const today = openToday();
       let at = NOW;
