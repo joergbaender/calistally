@@ -27,6 +27,24 @@ describe('readZip', () => {
     expect(await readZip((await buildZip([])).buffer as ArrayBuffer)).toEqual([]);
   });
 
+  it('refuses an entry declared larger than the entry limit, before inflating it', async () => {
+    const zip = await buildZip([{ name: 'big.json', data: text('x'.repeat(100)), method: 'deflate' }]);
+    await expect(readZip(zip.buffer as ArrayBuffer, { entryBytes: 50, totalBytes: 1000 })).rejects.toThrow(/big\.json is larger than the limit/);
+  });
+
+  it('refuses an archive whose entries add up beyond the total limit', async () => {
+    const zip = await buildZip([
+      { name: 'a.json', data: text('a'.repeat(40)), method: 'store' },
+      { name: 'b.json', data: text('b'.repeat(40)), method: 'store' },
+    ]);
+    await expect(readZip(zip.buffer as ArrayBuffer, { entryBytes: 50, totalBytes: 60 })).rejects.toThrow(/larger than the limit/);
+  });
+
+  it('stops inflating an entry at its declared size', async () => {
+    const zip = await buildZip([{ name: 'bomb.json', data: new Uint8Array(1024 * 1024), method: 'deflate', declaredSize: 10 }]);
+    await expect(readZip(zip.buffer as ArrayBuffer)).rejects.toThrow(/bomb\.json inflates beyond its declared size/);
+  });
+
   it('rejects a truncated archive and non-zip bytes', async () => {
     const zip = await buildZip([{ name: 'x.json', data: text('hello') }]);
     await expect(readZip(zip.buffer.slice(0, zip.length - 5) as ArrayBuffer)).rejects.toThrow(/zip/);
