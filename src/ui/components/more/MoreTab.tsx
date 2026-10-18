@@ -24,7 +24,7 @@ function Menu(): JSX.Element {
     <nav class="more-menu" aria-label="More">
       <h1 class="more-menu__title">More</h1>
       {MENU.map((m) => (
-        <button key={m.page} type="button" class="more-menu__item" onClick={() => router.navigate({ tab: 'more', page: m.page })}>
+        <button key={m.page} type="button" class="more-menu__item" aria-label={m.page === 'theme' ? `Theme, ${themeName(currentTheme.value)}` : undefined} onClick={() => router.navigate({ tab: 'more', page: m.page })}>
           {m.label}
           {m.page === 'theme' && <span class="more-menu__value">{themeName(currentTheme.value)}</span>}
         </button>

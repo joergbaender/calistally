@@ -44,6 +44,10 @@ describe('theme tokens', () => {
     expect(slate?.get('--scrim')).toBe('color-mix(in srgb, var(--bg) 70%, transparent)');
     expect(slate?.get('--shadow')).toBe('color-mix(in srgb, var(--bg) 60%, transparent)');
   });
+
+  it('the block parser refuses a theme declared twice', () => {
+    expect(() => themeBlocks(':root, [data-theme="slate"] { --bg: #000000; } [data-theme="slate"] { --bg: #000000; }')).toThrow('slate block twice');
+  });
 });
 
 /** Spec 5 §8: contrast of every theme, computed from theme.css itself. */
@@ -82,8 +86,8 @@ const TOKENS = [
 ];
 
 /** theme id → (property → value) for `:root, [data-theme="slate"]` and each `[data-theme="<id>"]` block, in file order. */
-function themeBlocks(): Map<string, Map<string, string>> {
-  const css = readFileSync(join(UI_DIR, 'theme.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+function themeBlocks(source = readFileSync(join(UI_DIR, 'theme.css'), 'utf8')): Map<string, Map<string, string>> {
+  const css = source.replace(/\/\*[\s\S]*?\*\//g, '');
   const blocks = new Map<string, Map<string, string>>();
   for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
     const selector = (m[1] ?? '').trim();
@@ -91,6 +95,7 @@ function themeBlocks(): Map<string, Map<string, string>> {
     if (id === undefined) continue;
     const props = new Map<string, string>();
     for (const d of (m[2] ?? '').matchAll(/([\w-]+)\s*:\s*([^;]+);/g)) props.set(d[1] ?? '', (d[2] ?? '').trim());
+    if (blocks.has(id)) throw new Error(`theme.css declares the ${id} block twice`);
     blocks.set(id, props);
   }
   return blocks;

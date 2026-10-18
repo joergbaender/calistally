@@ -32,7 +32,7 @@ describe('More menu (spec 5 §6)', () => {
   it('shows the fifth line with the current theme and opens the Theme page', async () => {
     currentTheme.value = 'dune';
     const { deps } = await mount('#/more');
-    const line = screen.getByRole('button', { name: /^Theme/ });
+    const line = screen.getByRole('button', { name: 'Theme, Dune' });
     expect(line.textContent).toBe('ThemeDune');
     fireEvent.click(line);
     expect(deps.router.route.value).toEqual({ tab: 'more', page: 'theme' });

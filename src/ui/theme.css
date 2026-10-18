@@ -807,7 +807,7 @@ span.session-head__tag { display: inline-flex; align-items: center; min-height: 
 .theme-row__swatches { display: flex; gap: 4px; }
 .theme-row__swatch { width: 14px; height: 24px; border: 1px solid var(--outline); border-radius: 4px; }
 .theme-row__swatch--bg { background: var(--bg); }
-.theme-row__swatch--panel { background: var(--panel-2); }
+.theme-row__swatch--panel-2 { background: var(--panel-2); }
 .theme-row__swatch--accent { background: var(--accent); }
 .theme-row__text { flex: 1; display: flex; flex-direction: column; }
 .theme-row__kind { color: var(--muted); font-size: 13px; font-weight: 400; }

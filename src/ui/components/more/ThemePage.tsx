@@ -44,7 +44,7 @@ export function ThemePage(): JSX.Element {
           >
             <span class="theme-row__swatches" aria-hidden="true">
               <span class="theme-row__swatch theme-row__swatch--bg" />
-              <span class="theme-row__swatch theme-row__swatch--panel" />
+              <span class="theme-row__swatch theme-row__swatch--panel-2" />
               <span class="theme-row__swatch theme-row__swatch--accent" />
             </span>
             <span class="theme-row__text">
