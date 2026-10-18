@@ -13,6 +13,7 @@ const TABLE: ReadonlyArray<readonly [string, Route]> = [
   ['#/more/bodyweight', { tab: 'more', page: 'bodyweight' }],
   ['#/more/catalog', { tab: 'more', page: 'catalog' }],
   ['#/more/catalog/ring-dip', { tab: 'more', page: 'catalog', id: 'ring-dip' }],
+  ['#/more/theme', { tab: 'more', page: 'theme' }],
   ['#/sync', { tab: 'sync' }],
 ];
 
@@ -66,6 +67,7 @@ describe('parseRoute', () => {
     expect(parseRoute('#/more/nowhere')).toEqual({ tab: 'log' });
     expect(parseRoute('#/more/exercises/extra')).toEqual({ tab: 'log' });
     expect(parseRoute('#/more/calendar/extra')).toEqual({ tab: 'log' });
+    expect(parseRoute('#/more/theme/dune')).toEqual({ tab: 'log' });
     expect(parseRoute('#/days/abc/extra')).toEqual({ tab: 'log' });
     expect(parseRoute('#/sync/extra')).toEqual({ tab: 'log' });
     expect(parseRoute('#/log/extra')).toEqual({ tab: 'log' });

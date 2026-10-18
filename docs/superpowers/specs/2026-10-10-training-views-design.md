@@ -1,7 +1,7 @@
 # Spec 4: Training views
 
 - **Date:** 2026-10-10
-- **Status:** approved by the owner on 2026-10-10 (design agreed section by section; the owner's decisions are recorded in §2). Amended on 2026-10-10 while plans 4a and 4b were written and reviewed; each amendment is marked in place. Amended on 2026-10-14 with the owner's corrections from using plan 4a (approved by the owner on 2026-10-14), marked in place. Amended on 2026-10-17 with the rest counter's pause and a legend for the set intervals, and §14 corrected to the exercise history's block marks (approved by the owner on 2026-10-17), marked in place.
+- **Status:** approved by the owner on 2026-10-10 (design agreed section by section; the owner's decisions are recorded in §2). Amended on 2026-10-10 while plans 4a and 4b were written and reviewed; each amendment is marked in place. Amended on 2026-10-14 with the owner's corrections from using plan 4a (approved by the owner on 2026-10-14), marked in place. Amended on 2026-10-17 with the rest counter's pause and a legend for the set intervals, and §14 corrected to the exercise history's block marks (approved by the owner on 2026-10-17), marked in place. Amended on 2026-10-18 by spec 5 (theme picker; approved by the owner on 2026-10-18), marked in place.
 - **Scope:** every screen of the app: the live log, the day list and session page, per-exercise history, calendar, bodyweight log, catalog screen, and the Sync tab that replaces the diagnostic shell of spec 3 §12. It also fixes the UI framework, the test approach for views, navigation and the session lifecycle. This spec covers **no overload calculations** (v1.1), **no CSV export** (deferred, §13) and **no model change**: every file keeps the shape of spec 1 at `MODEL_VERSION` 1.
 
 Builds on [spec 1](2026-10-06-data-model-design.md) (entities, record rules, derived values; its rules win over anything here), [spec 2](2026-10-07-xlsx-migration-design.md) (the migrated shapes the views must show: `dateUncertain`, `aggregate`, note-only blocks, `restSec`, raw-row `notes`) and [spec 3](2026-10-07-sync-hosting-design.md) (the store as the only door to data, the write guard, `heldBack`, the engine status, the prompted update). Where HANDOVER.md §4 disagrees with this spec, this spec wins; HANDOVER's analytics-first feature list is not the usage model (spec 1 §1).
@@ -34,7 +34,7 @@ Spec 4 is done when:
 | U8 | **Entry control: a stepper** showing the proposed next value with − and +, and one Add button; a tap on the number opens a number pad for decimals and jumps. | A number pad as the primary control (more buttons, less room for the reference ladder) |
 | U9 | **One spec, two implementation plans, two PRs.** 4a is the gym build (skeleton, Log, Days and session page, Sync tab, shell removal); 4b the More tab and corrections from using 4a. | Two specs (shared decisions written twice, 4b designed before 4a was used); one plan and one very large PR |
 | U10 | **CSV export is left out** of spec 4. Spec 1 §4's `export/sets.csv` is not built; when a consumer exists it will be a file handed to the device (share sheet or download), never a Dropbox write outside the store. | Writing to Dropbox as spec 1 said (the only write outside the store and its guard) |
-| U11 | **Colours are tokens.** One token block in one file; components never contain a literal colour; a re-theme edits that block only. | — |
+| U11 | **Colours are tokens.** One token block in one file; components never contain a literal colour; a re-theme edits that block only. One block per theme in the same file since spec 5 (amended 2026-10-18, approved by the owner on 2026-10-18). | — |
 | U12 | **Shell leftovers:** "Update app" gets visible states while it waits (§7); the paste-code login stays unchanged as the fallback, with one line saying Dropbox may ask for a login inside its sheet. | — |
 | U13 | **Two runs of one exercise** pair positionally: the reference session's blocks are cards in their order, and today's *n*-th block of exercise X pairs with the reference's *n*-th block of X (the rule of spec 1 §7 "previous occurrence"). | — |
 
@@ -111,7 +111,7 @@ Then the screen calls `data.edit(kind, path, fn)` for an existing file, where `f
 
 ### Device-local UI state
 
-Goes to the `meta` store, never into files: `reference:<sessionId>` (the chosen reference session id), `restStop:<sessionId>` (the stopped rest counter and its paused time, §4; amended 2026-10-14, plan 4b corrections; approved by the owner on 2026-10-14; paused time amended 2026-10-17, approved by the owner on 2026-10-17), `daysChip` (the last active chip), `lastRoute`. Losing it costs nothing; a second device re-derives the proposal.
+Goes to the `meta` store, never into files: `reference:<sessionId>` (the chosen reference session id), `restStop:<sessionId>` (the stopped rest counter and its paused time, §4; amended 2026-10-14, plan 4b corrections; approved by the owner on 2026-10-14; paused time amended 2026-10-17, approved by the owner on 2026-10-17), `daysChip` (the last active chip), `lastRoute`, `theme` (the chosen theme id; spec 5 §5; amended 2026-10-18, approved by the owner on 2026-10-18). Losing it costs nothing; a second device re-derives the proposal.
 
 ### Routing
 
@@ -125,6 +125,7 @@ By URL hash, one `computed` over `location.hash`, no router dependency:
 | `#/more` | More menu |
 | `#/more/exercises`, `#/more/exercise/<id>` | Exercise list, one exercise's history |
 | `#/more/calendar`, `#/more/bodyweight`, `#/more/catalog`, `#/more/catalog/<id>` | The other More screens |
+| `#/more/theme` | Theme page (spec 5 §6; amended 2026-10-18) |
 | `#/sync` | Sync tab |
 
 An unknown hash goes to `#/log`. On start: the OAuth redirect (query string on the base URL) is handled before mount as today and then routes to `#/sync`; otherwise `#/log` while a session is open (§4 Resume: a reload or an app update lands back on it; amended 2026-10-10, plan 4a); otherwise `meta.lastRoute`, else `#/log`; with no local data and no connection, `#/sync`. Deep pages show a back control that goes to their tab's root; the browser back button works through the hash history.
@@ -265,7 +266,7 @@ For every session, app-made and migrated alike, the open one included (amended 2
 
 ## 6. The More tab
 
-A menu of four lines: **Exercises · Calendar · Bodyweight · Catalog**.
+A menu of five lines: **Exercises · Calendar · Bodyweight · Catalog · Theme** (Theme added by spec 5 §6; amended 2026-10-18, approved by the owner on 2026-10-18).
 
 ### Exercise list and history
 
@@ -331,7 +332,7 @@ Soft issues are a `computed` over `data.sessions` and `data.catalog` with `check
 
 ## 8. Theme, layout and interaction rules
 
-- **Tokens** (U11) in `src/ui/theme.css` on `:root`: `--bg`, `--panel`, `--panel-2`, `--text`, `--muted`, `--accent`, `--ok`, `--danger`, `--outline`, plus `--on-accent` (text on the accent colour) and the calendar's `--chip-push`, `--chip-pull`, `--chip-legs`, `--chip-other` (amended 2026-10-10, plans 4a and 4b). The values start from the mockup the owner approved (dark: `#111827`, `#1f2937`, `#273449`, `#e5e7eb`, `#9ca3af`, `#f59e0b`, `#34d399`, `#f87171`, `#374151`). A component stylesheet may only reference tokens; a test greps `src/ui` for literal colours outside `theme.css` and fails on any.
+- **Tokens** (U11) in `src/ui/theme.css` on `:root`: `--bg`, `--panel`, `--panel-2`, `--text`, `--muted`, `--accent`, `--ok`, `--danger`, `--outline`, plus `--on-accent` (text on the accent colour) and the calendar's `--chip-push`, `--chip-pull`, `--chip-legs`, `--chip-other` (amended 2026-10-10, plans 4a and 4b). The values start from the mockup the owner approved (dark: `#111827`, `#1f2937`, `#273449`, `#e5e7eb`, `#9ca3af`, `#f59e0b`, `#34d399`, `#f87171`, `#374151`). A component stylesheet may only reference tokens; a test greps `src/ui` for literal colours outside `theme.css` and fails on any. Since spec 5 (amended 2026-10-18, approved by the owner on 2026-10-18), `theme.css` holds one block per theme (Slate & Amber on `:root`), each declaring every token plus `--status-bar`, `--scrim` and `--shadow`; a test checks completeness and contrast (spec 5 §8).
 - **Touch targets** at least 44 × 44 px. The entry area and tab bar respect `env(safe-area-inset-*)`. The stepper and Add sit in the bottom third of the screen.
 - **Text** is English (spec 1 D10). Dates show the weekday and the local calendar day; times are local; durations are mm:ss or h:mm:ss; decimals use the device locale for display only (the file always stores JSON numbers).
 - **Indicators** are rendered as ↑ ↓ = ≠ –, with a text alternative for screen readers; the amount mark first, then the load mark, load hidden when both blocks are plain bodyweight (spec 1 §7).
@@ -405,7 +406,7 @@ Each plan is written with the writing-plans skill, with full code and tests, and
 
 ## 13. Out of scope
 
-CSV export (U10; spec 1 §4's `export/sets.csv` is not built); v1.1 overload calculations (trends, best sets, effective load; all further pure functions over the same data, nothing here blocks them); charts; two blocks open at once (spec 1 §7 keeps the rule); tombstone garbage collection; a light theme (the token block makes it a later addition); Android; any model change.
+CSV export (U10; spec 1 §4's `export/sets.csv` is not built); v1.1 overload calculations (trends, best sets, effective load; all further pure functions over the same data, nothing here blocks them); charts; two blocks open at once (spec 1 §7 keeps the rule); tombstone garbage collection; a light theme (added by spec 5; amended 2026-10-18, approved by the owner on 2026-10-18); Android; any model change.
 
 ## 14. Amendments to earlier specs
 

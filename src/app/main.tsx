@@ -12,6 +12,7 @@ import { clockModeFor } from '../ui/app.vm';
 import { AppContext, type AppDeps, type SyncActions, type UiState } from '../ui/context';
 import { Data, storeChanges } from '../ui/data';
 import { Router, routeHash, startRoute } from '../ui/router';
+import { loadTheme, THEME_META_KEY } from '../ui/theme';
 import { BASE_URL, BUILD_ID, DROPBOX_APP_KEY, redirectUri } from './config';
 import { setupSwUpdate } from './sw-update';
 import { attachTriggers } from './triggers';
@@ -29,6 +30,8 @@ async function main(): Promise<void> {
     onChange: changes.onChange,
     onWrite: () => { engineRef?.requestPush(); },
   });
+  // Spec 5 §5: the stored theme first, so nothing is ever drawn in another one.
+  await loadTheme(() => store.getMeta(THEME_META_KEY));
   const auth = new Auth(db, { appKey: DROPBOX_APP_KEY, redirectUri: redirectUri() }, { fetch: (input, init) => fetch(input, init) });
   const client = new DropboxHttpClient({
     fetch: (input, init) => fetch(input, init),
