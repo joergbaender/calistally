@@ -1,5 +1,8 @@
-/* Spec 4 §8: the one token block. A re-theme edits this block only; components reference tokens. */
-:root {
+/* Spec 4 §8, spec 5 §4: the token blocks, one per theme. Components reference tokens only.
+   Every block declares every token, the var() ones too: a custom property resolves where it is
+   declared, so a row painted in one theme inside a page of another would otherwise inherit the
+   page's --chip-push, --scrim and so on. A test checks completeness and contrast (spec 5 §8). */
+:root, [data-theme="slate"] {
   color-scheme: dark;
   --bg: #111827;
   --panel: #1f2937;
@@ -16,6 +19,91 @@
   --chip-pull: var(--ok);
   --chip-legs: #60a5fa;
   --chip-other: var(--muted);
+  /* Behind the iOS status bar, whose text is always white (black-translucent; spec 5 T5). */
+  --status-bar: var(--bg);
+  /* The sheet backdrop and the shadows (spec 5 T6). */
+  --scrim: color-mix(in srgb, var(--bg) 70%, transparent);
+  --shadow: color-mix(in srgb, var(--bg) 60%, transparent);
+}
+[data-theme="daylight"] {
+  color-scheme: light;
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --panel-2: #eceff4;
+  --text: #111827;
+  --muted: #4b5563;
+  --accent: #a14a08;
+  --ok: #047857;
+  --danger: #b91c1c;
+  --outline: #cfd5de;
+  --on-accent: #ffffff;
+  --chip-push: var(--accent);
+  --chip-pull: var(--ok);
+  --chip-legs: #1d4ed8;
+  --chip-other: var(--muted);
+  --status-bar: #1f2937;
+  --scrim: color-mix(in srgb, var(--text) 35%, transparent);
+  --shadow: color-mix(in srgb, var(--text) 18%, transparent);
+}
+[data-theme="berry"] {
+  color-scheme: dark;
+  --bg: #1a1020;
+  --panel: #291a30;
+  --panel-2: #36223f;
+  --text: #f5e9f2;
+  --muted: #bba5bb;
+  --accent: #e879f9;
+  --ok: #5eead4;
+  --danger: #ff7a7a;
+  --outline: #4a3352;
+  --on-accent: #1a1020;
+  --chip-push: var(--accent);
+  --chip-pull: var(--ok);
+  --chip-legs: #93c5fd;
+  --chip-other: var(--muted);
+  --status-bar: var(--bg);
+  --scrim: color-mix(in srgb, var(--bg) 70%, transparent);
+  --shadow: color-mix(in srgb, var(--bg) 60%, transparent);
+}
+[data-theme="ultraviolet"] {
+  color-scheme: light;
+  --bg: #f4e6ff;
+  --panel: #ffffff;
+  --panel-2: #ecd3ff;
+  --text: #2b0a52;
+  --muted: #6a2f99;
+  --accent: #a01591;
+  --ok: #04664a;
+  --danger: #b01a1a;
+  --outline: #dcb6f7;
+  --on-accent: #ffffff;
+  --chip-push: var(--accent);
+  --chip-pull: var(--ok);
+  --chip-legs: #1d4ed8;
+  --chip-other: var(--muted);
+  --status-bar: #4a1477;
+  --scrim: color-mix(in srgb, var(--text) 35%, transparent);
+  --shadow: color-mix(in srgb, var(--text) 18%, transparent);
+}
+[data-theme="dune"] {
+  color-scheme: light;
+  --bg: #e9dfc8;
+  --panel: #f6f0e2;
+  --panel-2: #e2d5b8;
+  --text: #2b2216;
+  --muted: #5e4f37;
+  --accent: #6b4e24;
+  --ok: #3f6212;
+  --danger: #b42318;
+  --outline: #c9b994;
+  --on-accent: #ffffff;
+  --chip-push: var(--accent);
+  --chip-pull: var(--ok);
+  --chip-legs: #1e4f7a;
+  --chip-other: var(--muted);
+  --status-bar: #5a4426;
+  --scrim: color-mix(in srgb, var(--text) 35%, transparent);
+  --shadow: color-mix(in srgb, var(--text) 18%, transparent);
 }
 
 /* ---- base ---- */
@@ -37,7 +125,7 @@ body::before {
   inset-inline: 0;
   z-index: 15;
   height: env(safe-area-inset-top, 0px);
-  background: var(--bg);
+  background: var(--status-bar);
   pointer-events: none;
 }
 button, input, select, textarea { font: inherit; color: inherit; }
@@ -69,7 +157,7 @@ input, select, textarea { font-size: 16px; } /* iOS: no zoom on focus below 16 p
   z-index: 20;
   display: flex;
   align-items: flex-end;
-  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  background: var(--scrim);
 }
 .sheet {
   width: 100%;
@@ -79,7 +167,7 @@ input, select, textarea { font-size: 16px; } /* iOS: no zoom on focus below 16 p
   border-radius: 16px 16px 0 0;
   background: var(--panel);
   color: var(--text);
-  box-shadow: 0 -8px 24px color-mix(in srgb, var(--bg) 60%, transparent);
+  box-shadow: 0 -8px 24px var(--shadow);
   outline: none;
   /* Spec 4 §8: sheets slide up from the bottom. */
   animation: sheet-up 180ms ease-out;
@@ -209,7 +297,7 @@ input, select, textarea { font-size: 16px; } /* iOS: no zoom on focus below 16 p
   border-radius: 12px;
   background: var(--panel-2);
   color: var(--text);
-  box-shadow: 0 8px 24px color-mix(in srgb, var(--bg) 60%, transparent);
+  box-shadow: 0 8px 24px var(--shadow);
 }
 .toast__action {
   min-height: 44px;
