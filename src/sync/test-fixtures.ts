@@ -6,6 +6,8 @@ export interface ZipInput {
   method?: 'store' | 'deflate';
   /** Write zeroed sizes in the local header and a data descriptor after the data (general-purpose bit 3). */
   dataDescriptor?: boolean;
+  /** The uncompressed size written to the central directory, when it should not match the data. */
+  declaredSize?: number;
 }
 
 const CRC_TABLE = (() => {
@@ -67,7 +69,7 @@ export async function buildZip(inputs: ZipInput[]): Promise<Uint8Array> {
     header.setUint16(10, method === 'deflate' ? 8 : 0, true);
     header.setUint32(16, crc, true);
     header.setUint32(20, data.length, true);
-    header.setUint32(24, input.data.length, true);
+    header.setUint32(24, input.declaredSize ?? input.data.length, true);
     header.setUint16(28, name.length, true);
     header.setUint32(42, offset, true);
     central.push(concat([new Uint8Array(header.buffer), name]));

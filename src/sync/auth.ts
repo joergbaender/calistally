@@ -49,6 +49,10 @@ export const VERIFIER_LENGTH = 64;
 export const STATE_LENGTH = 32;
 export const PENDING_LOGIN_TTL_MS = 10 * 60 * 1000;
 export const REFRESH_MARGIN_MS = 5 * 60 * 1000;
+/** RFC 6749 §4.1.2.1: the only `error` values a redirect message may name. */
+const OAUTH_ERRORS: ReadonlySet<string> = new Set([
+  'invalid_request', 'unauthorized_client', 'access_denied', 'unsupported_response_type', 'invalid_scope', 'server_error', 'temporarily_unavailable',
+]);
 
 /** `length` characters from the RFC 7636 unreserved set, from crypto.getRandomValues. */
 export function randomString(length: number): string {
@@ -111,14 +115,17 @@ export class Auth {
     return this.db.getValue<PendingLogin>('auth', 'pending-login');
   }
 
-  /** Exchanges the code. `state` is checked for redirect logins; a pasted code carries none. */
-  async completeLogin(code: string, state?: string): Promise<Tokens> {
+  /** Exchanges the code. `from` says where the code came from and must match the pending login:
+   *  a code in the URL is never taken for a paste login, whose exchange checks no `state`.
+   *  `state` is checked for redirect logins; a pasted code carries none. */
+  async completeLogin(code: string, from: 'redirect' | 'paste', state?: string): Promise<Tokens> {
     const pending = await this.pendingLogin();
     if (pending === undefined) throw new AuthError('no-pending-login', 'no login in progress');
     if (this.now().getTime() - Date.parse(pending.createdAt) > PENDING_LOGIN_TTL_MS) {
       await this.db.delete('auth', 'pending-login');
       throw new AuthError('login-expired', 'the login took longer than 10 minutes; start again');
     }
+    if (pending.mode !== from) throw new AuthError('state-mismatch', 'the code did not come from the login that was started');
     if (pending.mode === 'redirect' && state !== pending.state) throw new AuthError('state-mismatch', 'the redirect did not match the login that was started');
     const body = new URLSearchParams({ grant_type: 'authorization_code', code, client_id: this.config.appKey, code_verifier: pending.verifier });
     if (pending.mode === 'redirect') body.set('redirect_uri', this.config.redirectUri);
@@ -138,6 +145,17 @@ export class Auth {
       await t.delete('auth', 'pending-login');
     });
     return tokens;
+  }
+
+  /** The message for an OAuth redirect that came back with `error`, and the pending redirect login
+   *  forgotten; undefined when no redirect login is pending (a crafted link). Text from the URL is
+   *  never shown: only the known RFC 6749 error codes are named. */
+  async redirectError(error: string): Promise<string | undefined> {
+    const pending = await this.pendingLogin();
+    if (pending === undefined || pending.mode !== 'redirect') return undefined;
+    await this.db.delete('auth', 'pending-login');
+    if (error === 'access_denied') return 'You declined access in Dropbox. Connect again when you are ready.';
+    return OAUTH_ERRORS.has(error) ? `Dropbox did not authorise the app (${error}).` : 'Dropbox did not authorise the app.';
   }
 
   tokens(): Promise<Tokens | undefined> {
@@ -180,19 +198,23 @@ export class Auth {
     return next.accessToken;
   }
 
-  /** Revokes the refresh token at Dropbox and forgets it locally. The caller clears the data stores. */
-  async signOut(): Promise<void> {
+  /** Revokes the refresh token at Dropbox and forgets it locally. The caller clears the data stores.
+   *  false when Dropbox did not confirm the revoke: the login then stays valid there until the owner
+   *  unlinks the app; local state is cleared anyway. */
+  async signOut(): Promise<boolean> {
+    let revoked = true;
     if (await this.isConnected()) {
       try {
         const token = await this.accessToken();
-        await this.deps.fetch(this.config.revokeUrl ?? REVOKE_URL, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
-        // Ignore non-ok responses; the token is revoked locally regardless of the server's reply.
+        const res = await this.deps.fetch(this.config.revokeUrl ?? REVOKE_URL, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+        revoked = res.ok;
       } catch {
-        // Offline or refresh failed: the token stays valid at Dropbox until the owner unlinks the app; local state is cleared anyway.
+        revoked = false;
       }
     }
     await this.db.delete('auth', 'tokens');
     await this.db.delete('auth', 'pending-login');
+    return revoked;
   }
 
   private async tokenRequest(body: URLSearchParams): Promise<Record<string, unknown>> {

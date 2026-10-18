@@ -1,0 +1,24 @@
+version: 2
+updates:
+  # Keeps the SHA-pinned actions in deploy.yml current.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ['*']
+
+  # One grouped PR a month for the npm dependencies; security fixes come as they appear.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      npm:
+        patterns: ['*']
+        update-types: [minor, patch]
+    ignore:
+      # Preact stays below 11 (CLAUDE.md "Stack"); a major Preact move is a decision, not a bump.
+      - dependency-name: preact
+        update-types: ['version-update:semver-major']
