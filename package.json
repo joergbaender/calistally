@@ -21,14 +21,14 @@
   },
   "devDependencies": {
     "@testing-library/preact": "^3.2.4",
-    "@types/node": "^26.6.4",
+    "@types/node": "^26.6.5",
     "exceljs": "^4.4.0",
     "fake-indexeddb": "^6.2.5",
     "happy-dom": "^20.14.6",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
-    "vite": "^8.3.3",
+    "vite": "^8.3.4",
     "vite-plugin-pwa": "^2.0.0",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.5"
   }
 }
