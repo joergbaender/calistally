@@ -776,9 +776,42 @@ span.session-head__tag { display: inline-flex; align-items: center; min-height: 
   background: var(--panel);
   text-align: left;
   font-size: 17px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 .more-page { display: flex; flex-direction: column; gap: 8px; }
 .more-page__empty { color: var(--muted); }
+
+.more-menu__value { color: var(--muted); font-size: 15px; }
+
+/* ---- .theme-list, .theme-row (more/ThemePage; spec 5 §6): each row carries data-theme, so its tokens are its own theme's ---- */
+.theme-list { display: flex; flex-direction: column; gap: 8px; }
+.theme-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 16px;
+  border: 1px solid var(--outline);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  text-align: left;
+  font-size: 17px;
+  font-weight: 600;
+}
+.theme-row.is-current { border: 2px solid var(--accent); padding: 9px 15px; }
+.theme-row__swatches { display: flex; gap: 4px; }
+.theme-row__swatch { width: 14px; height: 24px; border: 1px solid var(--outline); border-radius: 4px; }
+.theme-row__swatch--bg { background: var(--bg); }
+.theme-row__swatch--panel { background: var(--panel-2); }
+.theme-row__swatch--accent { background: var(--accent); }
+.theme-row__text { flex: 1; display: flex; flex-direction: column; }
+.theme-row__kind { color: var(--muted); font-size: 13px; font-weight: 400; }
+.theme-row__tick { color: var(--accent); font-size: 20px; font-weight: 700; }
 
 /* ---- .xlist (more/ExercisesPage) ---- */
 .xlist__group { margin-top: 8px; }

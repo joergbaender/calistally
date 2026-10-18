@@ -5,7 +5,7 @@
  */
 import { signal, type Signal } from '@preact/signals';
 
-export type MorePage = 'exercises' | 'exercise' | 'calendar' | 'bodyweight' | 'catalog';
+export type MorePage = 'exercises' | 'exercise' | 'calendar' | 'bodyweight' | 'catalog' | 'theme';
 
 export type Route =
   | { tab: 'log' }
@@ -16,7 +16,7 @@ export type Route =
 const LOG: Route = { tab: 'log' };
 
 /** More pages that stand alone, and those that may carry an id as a third segment. */
-const MORE_PLAIN: ReadonlySet<string> = new Set<MorePage>(['exercises', 'calendar', 'bodyweight', 'catalog']);
+const MORE_PLAIN: ReadonlySet<string> = new Set<MorePage>(['exercises', 'calendar', 'bodyweight', 'catalog', 'theme']);
 const MORE_WITH_ID: ReadonlySet<string> = new Set<MorePage>(['exercise', 'catalog']);
 
 function isMorePage(s: string): s is MorePage {
