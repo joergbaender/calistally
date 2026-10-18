@@ -93,7 +93,7 @@ describe('Auth.completeLogin', () => {
   it('exchanges the code with the verifier and stores the tokens', async () => {
     const { auth, calls } = await setup([tokenResponse]);
     await auth.startLogin();
-    const tokens = await auth.completeLogin('the-code', 'v'.repeat(32));
+    const tokens = await auth.completeLogin('the-code', 'redirect', 'v'.repeat(32));
     expect(tokens).toEqual({ refreshToken: 'rt1', accessToken: 'at1', expiresAt: '2030-05-01T14:00:00.000Z' });
     expect(await auth.tokens()).toEqual(tokens);
     expect(await auth.pendingLogin()).toBeUndefined();
@@ -107,39 +107,54 @@ describe('Auth.completeLogin', () => {
   it('refuses a state that does not match', async () => {
     const { auth, calls } = await setup([tokenResponse]);
     await auth.startLogin();
-    await expect(auth.completeLogin('the-code', 'other')).rejects.toMatchObject({ code: 'state-mismatch' });
+    await expect(auth.completeLogin('the-code', 'redirect', 'other')).rejects.toMatchObject({ code: 'state-mismatch' });
     expect(calls).toHaveLength(0);
   });
 
   it('refuses without a pending login, and after 10 minutes', async () => {
     const { auth, setClock } = await setup([tokenResponse]);
-    await expect(auth.completeLogin('c', 's')).rejects.toMatchObject({ code: 'no-pending-login' });
+    await expect(auth.completeLogin('c', 'redirect', 's')).rejects.toMatchObject({ code: 'no-pending-login' });
     await auth.startLogin();
     setClock(new Date('2030-05-01T10:10:01.000Z'));
-    await expect(auth.completeLogin('c', 'v'.repeat(32))).rejects.toMatchObject({ code: 'login-expired' });
+    await expect(auth.completeLogin('c', 'redirect', 'v'.repeat(32))).rejects.toMatchObject({ code: 'login-expired' });
     expect(await auth.pendingLogin()).toBeUndefined();
   });
 
   it('does not check state and sends no redirect_uri for a pasted code', async () => {
     const { auth, calls } = await setup([tokenResponse]);
     await auth.startLogin('paste');
-    await auth.completeLogin('pasted');
+    await auth.completeLogin('pasted', 'paste');
     const body = Object.fromEntries(new URLSearchParams(String(calls[0]?.init.body)));
     expect(body['redirect_uri']).toBeUndefined();
     expect(body['code_verifier']).toBe('v'.repeat(64));
   });
 
+  it('refuses a code from the URL while a paste login is pending', async () => {
+    const { auth, calls } = await setup([tokenResponse]);
+    await auth.startLogin('paste');
+    await expect(auth.completeLogin('planted', 'redirect', undefined)).rejects.toMatchObject({ code: 'state-mismatch' });
+    expect(calls).toHaveLength(0);
+    expect(await auth.pendingLogin()).toMatchObject({ mode: 'paste' });
+  });
+
+  it('refuses a pasted code while a redirect login is pending', async () => {
+    const { auth, calls } = await setup([tokenResponse]);
+    await auth.startLogin();
+    await expect(auth.completeLogin('pasted', 'paste')).rejects.toMatchObject({ code: 'state-mismatch' });
+    expect(calls).toHaveLength(0);
+  });
+
   it('reports a rejected code as unauthorized and a server error as network', async () => {
     const { auth } = await setup([json(400, { error: 'invalid_grant' }), json(500, {})]);
     await auth.startLogin();
-    await expect(auth.completeLogin('bad', 'v'.repeat(32))).rejects.toMatchObject({ code: 'unauthorized' });
-    await expect(auth.completeLogin('bad', 'v'.repeat(32))).rejects.toMatchObject({ code: 'network' });
+    await expect(auth.completeLogin('bad', 'redirect', 'v'.repeat(32))).rejects.toMatchObject({ code: 'unauthorized' });
+    await expect(auth.completeLogin('bad', 'redirect', 'v'.repeat(32))).rejects.toMatchObject({ code: 'network' });
   });
 
   it('refuses an incomplete token response and stores nothing', async () => {
     const { auth, db } = await setup([json(200, { access_token: 'at1', token_type: 'bearer' })]);
     await auth.startLogin();
-    await expect(auth.completeLogin('the-code', 'v'.repeat(32))).rejects.toMatchObject({ code: 'unauthorized', message: 'unexpected token response from Dropbox' });
+    await expect(auth.completeLogin('the-code', 'redirect', 'v'.repeat(32))).rejects.toMatchObject({ code: 'unauthorized', message: 'unexpected token response from Dropbox' });
     expect(await auth.tokens()).toBeUndefined();
   });
 });
@@ -179,20 +194,58 @@ describe('Auth.accessToken and refresh', () => {
   });
 });
 
+describe('Auth.redirectError', () => {
+  it('names a declined login and forgets the pending one', async () => {
+    const { auth } = await setup([]);
+    await auth.startLogin();
+    expect(await auth.redirectError('access_denied')).toBe('You declined access in Dropbox. Connect again when you are ready.');
+    expect(await auth.pendingLogin()).toBeUndefined();
+  });
+
+  it('shows a known OAuth error code and never text from the URL', async () => {
+    const { auth } = await setup([]);
+    await auth.startLogin();
+    expect(await auth.redirectError('server_error')).toBe('Dropbox did not authorise the app (server_error).');
+    await auth.startLogin();
+    expect(await auth.redirectError('Your session expired, sign in at evil.example')).toBe('Dropbox did not authorise the app.');
+  });
+
+  it('says nothing without a pending redirect login', async () => {
+    const { auth } = await setup([]);
+    expect(await auth.redirectError('access_denied')).toBeUndefined();
+    await auth.startLogin('paste');
+    expect(await auth.redirectError('access_denied')).toBeUndefined();
+    expect(await auth.pendingLogin()).toMatchObject({ mode: 'paste' });
+  });
+});
+
 describe('Auth.signOut', () => {
   it('revokes at Dropbox with the access token and forgets the tokens', async () => {
     const { auth, db, calls } = await setup([() => new Response('', { status: 200 })]);
     await db.setValue('auth', 'tokens', { refreshToken: 'rt', accessToken: 'at', expiresAt: '2030-05-01T14:00:00.000Z' });
-    await auth.signOut();
+    expect(await auth.signOut()).toBe(true);
     expect(calls[0]).toMatchObject({ url: 'https://api.dropboxapi.com/2/auth/token/revoke', init: { method: 'POST', headers: { Authorization: 'Bearer at' } } });
     expect(await auth.tokens()).toBeUndefined();
   });
 
-  it('forgets the tokens even when the revoke call fails', async () => {
+  it('forgets the tokens even when the revoke call fails, and says the revoke did not happen', async () => {
     const { auth, db } = await setup([]);
     await db.setValue('auth', 'tokens', { refreshToken: 'rt', accessToken: 'at', expiresAt: '2030-05-01T14:00:00.000Z' });
-    await auth.signOut();
+    expect(await auth.signOut()).toBe(false);
     expect(await auth.isConnected()).toBe(false);
+  });
+
+  it('says the revoke did not happen when Dropbox answers with an error', async () => {
+    const { auth, db } = await setup([() => new Response('', { status: 500 })]);
+    await db.setValue('auth', 'tokens', { refreshToken: 'rt', accessToken: 'at', expiresAt: '2030-05-01T14:00:00.000Z' });
+    expect(await auth.signOut()).toBe(false);
+    expect(await auth.isConnected()).toBe(false);
+  });
+
+  it('has nothing to revoke when not connected', async () => {
+    const { auth, calls } = await setup([]);
+    expect(await auth.signOut()).toBe(true);
+    expect(calls).toHaveLength(0);
   });
 
   it('leaves no tokens when signOut runs during a pending refresh', async () => {

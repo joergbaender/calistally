@@ -59,12 +59,12 @@ async function main(): Promise<void> {
   if (afterOAuth) {
     if (params.has('code')) {
       try {
-        await auth.completeLogin(params.get('code') as string, params.get('state') ?? undefined);
+        await auth.completeLogin(params.get('code') as string, 'redirect', params.get('state') ?? undefined);
       } catch (e) {
         ui.loginError.value = e instanceof AuthError ? e.message : 'login failed';
       }
     } else {
-      ui.loginError.value = `Dropbox did not authorise the app (${params.get('error_description') ?? params.get('error')})`;
+      ui.loginError.value = await auth.redirectError(params.get('error') as string);
     }
     window.history.replaceState(null, '', BASE_URL);
   }
@@ -125,7 +125,7 @@ async function main(): Promise<void> {
 
   async function finishPaste(code: string): Promise<void> {
     try {
-      await auth.completeLogin(code);
+      await auth.completeLogin(code, 'paste');
       ui.loginError.value = undefined;
       ui.pasteMode.value = false;
       ui.pasteUrl.value = undefined;
@@ -143,8 +143,11 @@ async function main(): Promise<void> {
     if (pending > 0 && !window.confirm(`${pending} change(s) have not reached Dropbox yet and will be lost. Sign out anyway?`)) return;
     engine.dispose();
     await Promise.race([engine.idle(), new Promise<void>((r) => setTimeout(r, 10_000))]);
-    await auth.signOut();
+    const revoked = await auth.signOut();
     await db.clearAll();
+    if (!revoked) {
+      window.alert('Signed out on this device. Dropbox could not be reached, so the login stays valid there until you remove CalisTally under Dropbox settings → Connected apps.');
+    }
     window.location.reload();
   }
 
